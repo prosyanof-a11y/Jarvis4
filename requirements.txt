@@ -1,47 +1,29 @@
-# AI Office - Jarvis4 Dependencies
+# AI Office - Jarvis4 Dependencies (Railway-compatible)
 
 # Web Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-websockets==12.0
 
 # Telegram
 python-telegram-bot==20.6
 
-# AI / LLM
-openai==1.37.1
-anthropic==0.7.8
-google-generativeai==0.3.2
+# AI / LLM (OpenRouter uses HTTP, no heavy deps)
+aiohttp==3.9.1
+httpx==0.25.2
 
 # Memory / Vector DB
 chromadb==0.4.22
-sentence-transformers==2.6.1
 
-# Voice
-SpeechRecognition==3.10.0
-pyttsx3==2.90
+# Voice (lightweight)
 gtts==2.5.1
-
-# Image Generation
-diffusers[torch]==0.26.3
-transformers==4.41.2
-accelerate==0.29.3
-
-# Tools
-aiohttp==3.9.1
-beautifulsoup4==4.12.2
-selenium==4.16.0
-playwright==1.40.0
 
 # Security
 bcrypt==4.1.2
 python-jose[cryptography]==3.3.0
-passlib==1.7.4
 
 # Utils
 python-dotenv==1.0.0
 pydantic==2.5.3
-pandas==2.2.1
-numpy==1.26.4
-pylint==3.0.3
-httpx==0.25.2
+
+# Web scraping (for tools)
+beautifulsoup4==4.12.2
