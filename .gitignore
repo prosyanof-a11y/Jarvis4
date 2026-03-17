@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+data/logs/*.log
+
+# Memory/DB
+data/memory/*
+data/knowledge/*
+data/chromadb/
+
+# Generated
+generated_images/*
+workspace/*
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Keep directories
+!data/logs/.gitkeep
+!data/memory/.gitkeep
+!data/knowledge/.gitkeep
+!generated_images/.gitkeep
+!workspace/.gitkeep
