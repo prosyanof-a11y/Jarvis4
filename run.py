@@ -40,13 +40,16 @@ from src.api.server import app as fastapi_app, set_dependencies
 
 # Configure logging
 os.makedirs("data/logs", exist_ok=True)
+log_handlers = [logging.StreamHandler(sys.stdout)]
+try:
+    log_handlers.append(logging.FileHandler(settings.LOG_FILE, encoding="utf-8"))
+except Exception:
+    pass  # Railway may not have writable filesystem
+
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    handlers=[
-        logging.FileHandler(settings.LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=log_handlers
 )
 logger = logging.getLogger("jarvis4")
 
@@ -143,11 +146,13 @@ class Jarvis4System:
         logger.info("=" * 60)
 
         # Start FastAPI in background
+        # Railway provides PORT env var
         import uvicorn
+        api_port = int(os.getenv("PORT", settings.FASTAPI_PORT))
         api_config = uvicorn.Config(
             fastapi_app,
             host=settings.FASTAPI_HOST,
-            port=settings.FASTAPI_PORT,
+            port=api_port,
             log_level="info"
         )
         api_server = uvicorn.Server(api_config)

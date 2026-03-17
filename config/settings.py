@@ -24,8 +24,10 @@ class Settings:
         self.OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "Jarvis4 AI Office")
 
         # ─── Telegram Bot Tokens (one per agent) ──
+        # Fallback: use TELEGRAM_BOT_TOKEN for all if individual tokens not set
+        fallback_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.TELEGRAM_TOKENS = {
-            "master": os.getenv("TELEGRAM_MASTER_BOT_TOKEN", ""),
+            "master": os.getenv("TELEGRAM_MASTER_BOT_TOKEN", fallback_token),
             "project_manager": os.getenv("TELEGRAM_PROJECT_MANAGER_BOT_TOKEN", ""),
             "researcher": os.getenv("TELEGRAM_RESEARCHER_BOT_TOKEN", ""),
             "programmer": os.getenv("TELEGRAM_PROGRAMMER_BOT_TOKEN", ""),
@@ -34,7 +36,7 @@ class Settings:
             "artist": os.getenv("TELEGRAM_ARTIST_BOT_TOKEN", ""),
             "marketer": os.getenv("TELEGRAM_MARKETER_BOT_TOKEN", ""),
         }
-        self.TELEGRAM_CONTROL_TOKEN = os.getenv("TELEGRAM_CONTROL_BOT_TOKEN", "")
+        self.TELEGRAM_CONTROL_TOKEN = os.getenv("TELEGRAM_CONTROL_BOT_TOKEN", fallback_token)
 
         # Authorized users
         users_str = os.getenv("TELEGRAM_AUTHORIZED_USERS", "")
