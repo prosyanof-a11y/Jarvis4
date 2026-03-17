@@ -243,23 +243,44 @@ class ArtistAgent(BaseAgent):
                 "timestamp": datetime.now().isoformat()}
 
     async def _generate_image(self, prompt: str) -> str:
-        """Generate image. Priority: Pollinations (free) → OpenAI DALL-E."""
+        """Generate image. Uses multiple free/paid APIs."""
         import aiohttp
         from urllib.parse import quote
 
-        # 1. Pollinations.ai — FREE, no API key needed
-        try:
-            encoded = quote(prompt)
-            url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
-                    if resp.status == 200 and resp.content_type.startswith("image"):
-                        return url  # Pollinations returns the image at this URL
-            logger.warning("Pollinations.ai failed")
-        except Exception as e:
-            logger.warning(f"Pollinations error: {e}")
+        # 1. Together.ai free inference (Stable Diffusion XL)
+        together_key = os.getenv("TOGETHER_API_KEY", "")
+        if together_key:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        "https://api.together.xyz/v1/images/generations",
+                        headers={"Authorization": f"Bearer {together_key}", "Content-Type": "application/json"},
+                        json={"model": "stabilityai/stable-diffusion-xl-base-1.0",
+                              "prompt": prompt, "n": 1, "width": 1024, "height": 1024},
+                        timeout=aiohttp.ClientTimeout(total=60)
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("data"):
+                                url = data["data"][0].get("url", "")
+                                if url:
+                                    return url
+            except Exception as e:
+                logger.warning(f"Together.ai image: {e}")
 
-        # 2. OpenAI DALL-E (if key available)
+        # 2. Pollinations.ai — FREE, no key
+        try:
+            encoded = quote(prompt, safe='')
+            poll_url = f"https://image.pollinations.ai/prompt/{encoded}"
+            async with aiohttp.ClientSession() as session:
+                async with session.head(poll_url, timeout=aiohttp.ClientTimeout(total=30),
+                                        allow_redirects=True) as resp:
+                    if resp.status == 200:
+                        return poll_url
+        except Exception as e:
+            logger.warning(f"Pollinations: {e}")
+
+        # 3. OpenAI DALL-E
         key = os.getenv("OPENAI_API_KEY", "")
         if key:
             try:
@@ -276,7 +297,8 @@ class ArtistAgent(BaseAgent):
             except Exception as e:
                 logger.error(f"OpenAI image: {e}")
 
-        return ""
+        # 4. Fallback: return Pollinations URL anyway (it may work for Telegram)
+        return f"https://image.pollinations.ai/prompt/{quote(prompt, safe='')}"
 
 
 class MarketerAgent(BaseAgent):
