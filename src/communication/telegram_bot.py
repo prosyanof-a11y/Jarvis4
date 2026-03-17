@@ -443,6 +443,21 @@ class ControlPanelBot:
     async def _execute_and_reply(self, update, task):
         try:
             result = await self.task_engine.execute_task(task)
+
+            # Check for images in results
+            if isinstance(result, dict):
+                for r in result.get("results", []):
+                    res = r.get("result", {})
+                    if isinstance(res, dict) and res.get("image_url"):
+                        try:
+                            await update.message.reply_photo(
+                                photo=res["image_url"],
+                                caption=f"🎨 {r.get('agent', 'Artist')}: изображение"
+                            )
+                        except Exception:
+                            await update.message.reply_text(f"🎨 Изображение: {res['image_url']}")
+
+            # Send text result
             text = str(result)
             if len(text) > 3500:
                 text = text[:3500] + "..."

@@ -57,7 +57,7 @@ class MasterAgent(BaseAgent):
             agent_type = subtask_info["agent"]
             desc = subtask_info["description"]
 
-            await self._report_progress(task, progress, f"Делегирую: {desc[:50]}...")
+            await self._report_progress(task, progress, f"Делегирую: {agent_type}: {desc[:50]}...")
 
             agent = self.agent_manager.get_agent(agent_type) if self.agent_manager else None
             if agent:
@@ -66,8 +66,15 @@ class MasterAgent(BaseAgent):
                     await agent.think(subtask)
                     result = await agent.work(subtask)
                     results.append({"agent": agent_type, "result": result, "success": True})
+
+                    # Send subtask result to Master's Telegram
+                    await self._send_subtask_result(agent_type, result)
+
                 except Exception as e:
                     results.append({"agent": agent_type, "error": str(e), "success": False})
+                    await self.notify(NotificationType.TASK_ERROR, {
+                        "message": f"Ошибка {agent_type}: {str(e)[:100]}"
+                    })
             else:
                 results.append({"agent": agent_type, "error": "Агент не найден", "success": False})
 
@@ -86,6 +93,47 @@ class MasterAgent(BaseAgent):
 
         self.task_history.append(final)
         return final
+
+    async def _send_subtask_result(self, agent_type: str, result):
+        """Send subtask result to Master's Telegram chat, including images."""
+        if not self._telegram_notifier:
+            return
+
+        try:
+            # Check for image URL in result
+            image_url = None
+            result_text = ""
+
+            if isinstance(result, dict):
+                image_url = result.get("image_url")
+                result_text = result.get("result", str(result))
+            else:
+                result_text = str(result)
+
+            # Send image if available
+            if image_url and hasattr(self._telegram_notifier, 'bot') and self._telegram_notifier.bot:
+                for cid in self._telegram_notifier.chat_ids:
+                    try:
+                        await self._telegram_notifier.bot.send_photo(
+                            chat_id=cid,
+                            photo=image_url,
+                            caption=f"🎨 {agent_type}: изображение создано"
+                        )
+                    except Exception as e:
+                        # If photo fails, send URL as text
+                        await self._telegram_notifier.bot.send_message(
+                            chat_id=cid,
+                            text=f"🎨 {agent_type}: {image_url}"
+                        )
+            else:
+                # Send text result
+                if len(result_text) > 3000:
+                    result_text = result_text[:3000] + "..."
+                await self.notify(NotificationType.TASK_COMPLETED, {
+                    "message": f"📄 {agent_type} завершил:\n{result_text[:500]}"
+                })
+        except Exception as e:
+            self.logger.error(f"Send subtask result error: {e}")
 
     def _create_execution_plan(self, description: str) -> List[Dict[str, str]]:
         """Create execution plan based on task description keywords."""
