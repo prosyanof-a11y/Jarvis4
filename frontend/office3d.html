@@ -588,8 +588,13 @@ function updateLabels() {
 const API_CANDIDATES = [
     window.location.origin,
     'https://jarvis4-production.up.railway.app',
+    'https://jarvis4.up.railway.app',
+    'http://jarvis4.railway.internal:8000',
     'http://localhost:8000'
 ];
+// Allow manual override via URL parameter: ?api=https://your-url.railway.app
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('api')) API_CANDIDATES.unshift(urlParams.get('api'));
 let API_BASE = 'http://localhost:8000';
 
 async function detectAPI() {
