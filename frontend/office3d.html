@@ -584,40 +584,77 @@ function updateLabels() {
     });
 }
 
-// ─── WebSocket ────────────────────────────────────────────────
+// ─── Cloud Sync — Auto-detect API URL ─────────────────────────
+const API_CANDIDATES = [
+    window.location.origin,
+    'https://jarvis4-production.up.railway.app',
+    'http://localhost:8000'
+];
+let API_BASE = 'http://localhost:8000';
+
+async function detectAPI() {
+    for (const url of API_CANDIDATES) {
+        if (!url || url === 'null' || url.startsWith('file:')) continue;
+        try {
+            const r = await fetch(url + '/', { signal: AbortSignal.timeout(3000) });
+            if (r.ok) { API_BASE = url; addLog('System', 'Cloud connected: ' + url, 'success');
+                document.getElementById('connSt').textContent = 'Online';
+                document.getElementById('connSt').style.color = '#2ecc71'; return; }
+        } catch(e) {}
+    }
+    document.getElementById('connSt').textContent = 'Offline';
+    document.getElementById('connSt').style.color = '#e74c3c';
+    addLog('System', 'Cloud unreachable. Retrying...', 'error');
+    setTimeout(detectAPI, 10000);
+}
+detectAPI();
+
+// Poll cloud status every 3s
+async function pollCloud() {
+    try {
+        const r = await fetch(API_BASE + '/status', { signal: AbortSignal.timeout(5000) });
+        if (r.ok) {
+            const data = await r.json();
+            let active = 0;
+            (data.agents||[]).forEach(a => {
+                const a3d = agents3D.find(x => x.name.toLowerCase() === (a.name||'').toLowerCase());
+                if (a3d) {
+                    const old = a3d.state;
+                    a3d.state = a.state || 'idle';
+                    if (a.state === 'working' || a.state === 'thinking') active++;
+                    if (a.current_task && a.state === 'working' && old !== 'working') {
+                        a3d.targetX = a3d.homeX + (Math.random()-0.5)*2;
+                        a3d.targetZ = a3d.homeZ - 1;
+                        addLog(a.name, a.current_task.substring(0,40)+'...', 'info');
+                    }
+                    if (a.state === 'finished' && old === 'working') {
+                        a3d.targetX = a3d.homeX; a3d.targetZ = a3d.homeZ;
+                        addLog(a.name, 'Done!', 'success');
+                    }
+                }
+            });
+            document.getElementById('sActive').textContent = active;
+            const done = (data.tasks||[]).filter(t=>t.state==='finished').length;
+            document.getElementById('sDone').textContent = done;
+        }
+    } catch(e) {}
+    setTimeout(pollCloud, 3000);
+}
+setTimeout(pollCloud, 2000);
+
+// WebSocket (optional, for local dev)
 let ws = null;
 function connectWS() {
     try {
-        ws = new WebSocket('ws://localhost:8765');
-        ws.onopen = () => { document.getElementById('connSt').textContent = 'Online'; addLog('System', 'Connected', 'success'); };
-        ws.onmessage = (e) => {
-            try {
-                const d = JSON.parse(e.data);
-                if (d.agents) {
-                    let active = 0;
-                    d.agents.forEach(a => {
-                        const a3d = agents3D.find(x => x.name.toLowerCase() === (a.name||'').toLowerCase());
-                        if (a3d) {
-                            a3d.state = a.state || 'idle';
-                            if (a.state === 'working' || a.state === 'thinking') active++;
-                            if (a.current_task) {
-                                a3d.task = a.current_task;
-                                // Move to interaction area when working
-                                if (a.state === 'working') {
-                                    a3d.targetX = a3d.homeX + (Math.random()-0.5)*2;
-                                    a3d.targetZ = a3d.homeZ - 1;
-                                }
-                            }
-                        }
-                    });
-                    document.getElementById('sActive').textContent = active;
-                }
-            } catch(e) {}
-        };
-        ws.onclose = () => { document.getElementById('connSt').textContent = 'Offline'; setTimeout(connectWS, 3000); };
-    } catch(e) { setTimeout(connectWS, 5000); }
+        const wsUrl = API_BASE.replace('http','ws').replace(':8000',':8765');
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = (e) => { try { const d=JSON.parse(e.data); if(d.agents) d.agents.forEach(a=>{
+            const a3d=agents3D.find(x=>x.name.toLowerCase()===(a.name||'').toLowerCase());
+            if(a3d) a3d.state=a.state||'idle'; }); } catch(e){} };
+        ws.onclose = () => setTimeout(connectWS, 10000);
+    } catch(e) {}
 }
-connectWS();
+setTimeout(connectWS, 3000);
 
 // ─── Commands ─────────────────────────────────────────────────
 let doneCount = 0;
@@ -635,7 +672,7 @@ async function sendCmd() {
     master.targetZ = -4;
     
     try {
-        const resp = await fetch('http://localhost:8000/task', {
+        const resp = await fetch(API_BASE + '/task', {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({description: text})
         });
