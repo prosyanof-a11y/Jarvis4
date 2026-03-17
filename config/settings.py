@@ -17,6 +17,12 @@ class Settings:
         self.ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
         self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
+        # ─── OpenRouter (100+ AI models) ──────────
+        self.OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+        self.OPENROUTER_DEFAULT_MODEL = os.getenv("OPENROUTER_DEFAULT_MODEL", "anthropic/claude-3.5-sonnet")
+        self.OPENROUTER_SITE_URL = os.getenv("OPENROUTER_SITE_URL", "https://jarvis4.ai")
+        self.OPENROUTER_APP_NAME = os.getenv("OPENROUTER_APP_NAME", "Jarvis4 AI Office")
+
         # ─── Telegram Bot Tokens (one per agent) ──
         self.TELEGRAM_TOKENS = {
             "master": os.getenv("TELEGRAM_MASTER_BOT_TOKEN", ""),

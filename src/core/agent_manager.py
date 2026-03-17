@@ -6,6 +6,7 @@ Responsibilities:
 - Start/stop agent work loops
 - Provide agent lookup
 - Report agent statuses
+- Configure LLM (OpenRouter) for all agents
 """
 
 import asyncio
@@ -20,6 +21,7 @@ from src.agents.worker_agents import (
     ResearcherAgent, ProgrammerAgent, AnalystAgent,
     DesignerAgent, ArtistAgent, MarketerAgent
 )
+from src.ai.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +29,19 @@ logger = logging.getLogger(__name__)
 class AgentManager:
     """Central manager for all AI agents."""
 
-    def __init__(self, memory_system=None):
+    def __init__(self, memory_system=None, llm_client: LLMClient = None):
         self.memory_system = memory_system
+        self.llm_client = llm_client
         self.agents: Dict[str, BaseAgent] = {}
         self._initialized = False
         self._agent_tasks: List[asyncio.Task] = []
+
+    def set_llm_client(self, llm_client: LLMClient):
+        """Set LLM client and propagate to all agents."""
+        self.llm_client = llm_client
+        for agent in self.agents.values():
+            agent.set_llm_client(llm_client)
+        logger.info(f"LLM client set for all agents (model: {llm_client.default_model})")
 
     async def initialize(self):
         """Initialize all core agents."""
@@ -61,6 +71,11 @@ class AgentManager:
         if self.memory_system:
             for agent in self.agents.values():
                 agent.set_memory_system(self.memory_system)
+
+        # Set LLM client for all agents
+        if self.llm_client:
+            for agent in self.agents.values():
+                agent.set_llm_client(self.llm_client)
 
         self._initialized = True
         logger.info(f"Initialized {len(self.agents)} agents")

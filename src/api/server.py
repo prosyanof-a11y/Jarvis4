@@ -41,11 +41,13 @@ task_engine = None
 agent_manager = None
 memory_system = None
 voice_system = None
+llm_client = None
 
 
 class TaskRequest(BaseModel):
     description: str
     target_agent: Optional[str] = None
+    model: Optional[str] = None  # Override AI model for this task
 
 
 class AssignRequest(BaseModel):
@@ -57,13 +59,25 @@ class VoiceRequest(BaseModel):
     audio_path: str
 
 
-def set_dependencies(te, am, ms, vs=None):
+class ModelSelectRequest(BaseModel):
+    model: str  # e.g. "claude-3.5-sonnet" or "openai/gpt-4o"
+
+
+class ChatRequest(BaseModel):
+    message: str
+    model: Optional[str] = None
+    system_prompt: Optional[str] = None
+    agent: Optional[str] = None
+
+
+def set_dependencies(te, am, ms, vs=None, lc=None):
     """Set dependencies from the main application."""
-    global task_engine, agent_manager, memory_system, voice_system
+    global task_engine, agent_manager, memory_system, voice_system, llm_client
     task_engine = te
     agent_manager = am
     memory_system = ms
     voice_system = vs
+    llm_client = lc
 
 
 @app.get("/")
@@ -147,3 +161,83 @@ async def process_voice(request: VoiceRequest):
         raise HTTPException(400, "Could not recognize speech")
     task = await task_engine.submit_task(text)
     return {"recognized_text": text, "task_id": task.id}
+
+
+# ─── LLM / OpenRouter Endpoints ───────────────────────────────────
+
+@app.get("/llm/models")
+async def list_models():
+    """List available AI model shortcuts."""
+    if not llm_client:
+        raise HTTPException(500, "LLM client not initialized")
+    from src.ai.llm_client import AVAILABLE_MODELS
+    return {
+        "current_model": llm_client.default_model,
+        "available_models": AVAILABLE_MODELS,
+        "api_configured": bool(llm_client.api_key),
+    }
+
+
+@app.post("/llm/model")
+async def set_model(request: ModelSelectRequest):
+    """Change the default AI model for all agents."""
+    if not llm_client:
+        raise HTTPException(500, "LLM client not initialized")
+    old_model = llm_client.default_model
+    llm_client.set_model(request.model)
+    # Update all agents
+    if agent_manager:
+        agent_manager.set_llm_client(llm_client)
+    return {
+        "old_model": old_model,
+        "new_model": llm_client.default_model,
+        "status": "updated"
+    }
+
+
+@app.get("/llm/info")
+async def llm_info():
+    """Get current LLM configuration."""
+    if not llm_client:
+        raise HTTPException(500, "LLM client not initialized")
+    return llm_client.get_info()
+
+
+@app.post("/llm/chat")
+async def llm_chat(request: ChatRequest):
+    """Direct chat with the AI model."""
+    if not llm_client:
+        raise HTTPException(500, "LLM client not initialized")
+
+    # If agent specified, use agent's ask_llm
+    if request.agent and agent_manager:
+        agent = agent_manager.get_agent(request.agent)
+        if agent:
+            response = await agent.ask_llm(
+                request.message,
+                system_prompt=request.system_prompt,
+                model=request.model
+            )
+            return {"response": response, "agent": request.agent,
+                    "model": request.model or llm_client.default_model}
+
+    # Direct LLM call
+    result = await llm_client.chat(
+        message=request.message,
+        model=request.model,
+        system_prompt=request.system_prompt
+    )
+    return {
+        "response": result.content,
+        "model": result.model,
+        "usage": result.usage
+    }
+
+
+@app.get("/llm/models/fetch")
+async def fetch_openrouter_models():
+    """Fetch all available models from OpenRouter API."""
+    if not llm_client:
+        raise HTTPException(500, "LLM client not initialized")
+    models = await llm_client.fetch_available_models()
+    return {"count": len(models), "models": models[:50]}  # Limit to 50

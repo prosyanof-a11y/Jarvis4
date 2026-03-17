@@ -35,6 +35,7 @@ from src.communication.telegram_bot import TelegramBotManager
 from src.communication.websocket_server import WebSocketServer
 from src.voice.voice_system import VoiceSystem
 from src.security.security_manager import SecurityManager
+from src.ai.llm_client import LLMClient
 from src.api.server import app as fastapi_app, set_dependencies
 
 # Configure logging
@@ -67,7 +68,16 @@ class Jarvis4System:
 
     def __init__(self):
         self.memory = MemorySystem(settings.CHROMA_PATH, settings.KNOWLEDGE_PATH)
-        self.agent_manager = AgentManager(self.memory)
+
+        # Initialize LLM client (OpenRouter)
+        self.llm_client = LLMClient(
+            api_key=settings.OPENROUTER_API_KEY,
+            default_model=settings.OPENROUTER_DEFAULT_MODEL,
+            site_url=settings.OPENROUTER_SITE_URL,
+            app_name=settings.OPENROUTER_APP_NAME
+        )
+
+        self.agent_manager = AgentManager(self.memory, self.llm_client)
         self.task_engine = TaskEngine(self.agent_manager, self.memory)
         self.telegram_manager = TelegramBotManager(
             self.agent_manager, self.task_engine, settings
@@ -84,7 +94,7 @@ class Jarvis4System:
         )
 
         # Set FastAPI dependencies
-        set_dependencies(self.task_engine, self.agent_manager, self.memory, self.voice)
+        set_dependencies(self.task_engine, self.agent_manager, self.memory, self.voice, self.llm_client)
 
     async def start(self):
         """Start all system components."""

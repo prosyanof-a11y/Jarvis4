@@ -87,6 +87,33 @@ class BaseAgent:
         self._telegram_notifier = None
         self._running = False
         self._memory_system = None
+        self._llm_client = None  # OpenRouter LLM client
+
+    # ─── LLM / AI Integration ─────────────────────────────────────
+
+    def set_llm_client(self, llm_client):
+        """Set the LLM client (OpenRouter) for AI-powered task execution."""
+        self._llm_client = llm_client
+
+    async def ask_llm(self, prompt: str, system_prompt: str = None,
+                      model: str = None) -> str:
+        """Ask the LLM a question. Uses OpenRouter API."""
+        if not self._llm_client:
+            return f"[{self.name}] LLM not configured"
+        
+        if not system_prompt:
+            system_prompt = (
+                f"You are {self.name}, an AI agent with role: {self.role}. "
+                f"Your capabilities: {', '.join(self.capabilities)}. "
+                f"Respond in Russian. Be concise and professional."
+            )
+        
+        response = await self._llm_client.chat(
+            message=prompt,
+            model=model,
+            system_prompt=system_prompt
+        )
+        return response.content
 
     # ─── Telegram Integration ──────────────────────────────────────
 
