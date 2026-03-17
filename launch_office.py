@@ -18,7 +18,8 @@ import time
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.resolve()
-OFFICE_HTML = PROJECT_DIR / "frontend" / "office.html"
+OFFICE_HTML = PROJECT_DIR / "frontend" / "office3d.html"  # 3D version
+OFFICE_HTML_2D = PROJECT_DIR / "frontend" / "office.html"  # 2D fallback
 RUN_SCRIPT = PROJECT_DIR / "run.py"
 
 
