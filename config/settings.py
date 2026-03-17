@@ -90,14 +90,6 @@ class Settings:
             "marketer": os.getenv("AGENT_MARKETER_MODEL", "mistralai/mistral-7b-instruct:free"),
         }
 
-    def get_agent_model(self, agent_name: str) -> str:
-        """Get the configured AI model for a specific agent."""
-        return self.AGENT_MODELS.get(agent_name.lower(), self.OPENROUTER_DEFAULT_MODEL)
-
-    def set_agent_model(self, agent_name: str, model: str):
-        """Set the AI model for a specific agent (runtime only, not persisted to .env)."""
-        self.AGENT_MODELS[agent_name.lower()] = model
-
         # ─── Logging ──────────────────────────────
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
         self.LOG_FILE = os.getenv("LOG_FILE", "./data/logs/jarvis4.log")
@@ -106,6 +98,14 @@ class Settings:
         for d in [self.WORKSPACE_DIR, self.GENERATED_IMAGES_DIR,
                   self.LOGS_DIR, self.CHROMA_PATH, self.KNOWLEDGE_PATH]:
             os.makedirs(d, exist_ok=True)
+
+    def get_agent_model(self, agent_name: str) -> str:
+        """Get the configured AI model for a specific agent."""
+        return self.AGENT_MODELS.get(agent_name.lower(), self.OPENROUTER_DEFAULT_MODEL)
+
+    def set_agent_model(self, agent_name: str, model: str):
+        """Set the AI model for a specific agent (runtime only, not persisted to .env)."""
+        self.AGENT_MODELS[agent_name.lower()] = model
 
 
 # Global singleton
