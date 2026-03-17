@@ -561,20 +561,28 @@ class TelegramBotManager:
         self.control_bot: Optional[ControlPanelBot] = None
 
     async def initialize(self):
-        """Create bots for all agents."""
-        # Agent bots
+        """Create bots for all agents. Avoid duplicate tokens (one token = one bot)."""
+        used_tokens = set()
+
+        # Control panel bot gets priority for the main token
+        control_token = self.settings.TELEGRAM_CONTROL_TOKEN
+        if control_token and not control_token.startswith("your_"):
+            self.control_bot = ControlPanelBot(
+                self.task_engine, self.agent_manager, control_token
+            )
+            used_tokens.add(control_token)
+            logger.info(f"Control Panel bot registered")
+
+        # Agent bots — only if they have UNIQUE tokens (not same as control)
         for name, agent in self.agent_manager.agents.items():
             token = self.settings.TELEGRAM_TOKENS.get(name, "")
-            if token and not token.startswith("your_"):
+            if token and not token.startswith("your_") and token not in used_tokens:
                 bot = AgentTelegramBot(agent, token)
                 self.agent_bots[name] = bot
+                used_tokens.add(token)
+                logger.info(f"Agent bot registered: {name}")
 
-        # Control panel
-        if self.settings.TELEGRAM_CONTROL_TOKEN:
-            self.control_bot = ControlPanelBot(
-                self.task_engine, self.agent_manager,
-                self.settings.TELEGRAM_CONTROL_TOKEN
-            )
+        logger.info(f"Total bots: {len(self.agent_bots)} agents + {'1 control' if self.control_bot else '0 control'}")
 
     async def start_all(self):
         """Start all bots."""
