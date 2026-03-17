@@ -46,7 +46,7 @@ class Settings:
 
         # ─── Server Settings ──────────────────────
         self.FASTAPI_HOST = os.getenv("FASTAPI_HOST", "0.0.0.0")
-        self.FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "8000"))
+        self.FASTAPI_PORT = int(os.getenv("PORT", os.getenv("FASTAPI_PORT", "8000")))
         self.WS_HOST = os.getenv("WS_HOST", "localhost")
         self.WS_PORT = int(os.getenv("WS_PORT", "8765"))
 
