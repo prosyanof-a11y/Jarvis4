@@ -114,17 +114,37 @@ class MasterAgent(BaseAgent):
             if image_url and hasattr(self._telegram_notifier, 'bot') and self._telegram_notifier.bot:
                 for cid in self._telegram_notifier.chat_ids:
                     try:
-                        await self._telegram_notifier.bot.send_photo(
-                            chat_id=cid,
-                            photo=image_url,
-                            caption=f"🎨 {agent_type}: изображение создано"
-                        )
+                        if image_url.startswith("file://"):
+                            # Local file — send as document
+                            file_path = image_url.replace("file://", "")
+                            with open(file_path, 'rb') as f:
+                                await self._telegram_notifier.bot.send_photo(
+                                    chat_id=cid,
+                                    photo=f,
+                                    caption=f"🎨 {agent_type}: изображение создано"
+                                )
+                            # Clean up temp file
+                            try:
+                                import os
+                                os.remove(file_path)
+                            except Exception:
+                                pass
+                        else:
+                            # URL — send directly
+                            await self._telegram_notifier.bot.send_photo(
+                                chat_id=cid,
+                                photo=image_url,
+                                caption=f"🎨 {agent_type}: изображение создано"
+                            )
                     except Exception as e:
-                        # If photo fails, send URL as text
-                        await self._telegram_notifier.bot.send_message(
-                            chat_id=cid,
-                            text=f"🎨 {agent_type}: {image_url}"
-                        )
+                        self.logger.error(f"Send photo error: {e}")
+                        try:
+                            await self._telegram_notifier.bot.send_message(
+                                chat_id=cid,
+                                text=f"🎨 {agent_type}: изображение создано (не удалось отправить фото)"
+                            )
+                        except Exception:
+                            pass
             else:
                 # Send text result
                 if len(result_text) > 3000:

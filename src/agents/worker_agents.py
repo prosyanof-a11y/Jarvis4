@@ -297,8 +297,26 @@ class ArtistAgent(BaseAgent):
             except Exception as e:
                 logger.error(f"OpenAI image: {e}")
 
-        # 4. Fallback: return Pollinations URL anyway (it may work for Telegram)
-        return f"https://image.pollinations.ai/prompt/{quote(prompt, safe='')}"
+        # 4. Fallback: download from Pollinations and return bytes
+        try:
+            encoded = quote(prompt, safe='')
+            poll_url = f"https://image.pollinations.ai/prompt/{encoded}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(poll_url, timeout=aiohttp.ClientTimeout(total=60),
+                                       allow_redirects=True) as resp:
+                    if resp.status == 200:
+                        img_bytes = await resp.read()
+                        if len(img_bytes) > 1000:  # Valid image
+                            # Save to temp file
+                            import tempfile
+                            fd, path = tempfile.mkstemp(suffix='.png')
+                            with os.fdopen(fd, 'wb') as f:
+                                f.write(img_bytes)
+                            return f"file://{path}"
+        except Exception as e:
+            logger.error(f"Pollinations download: {e}")
+
+        return ""
 
 
 class MarketerAgent(BaseAgent):
