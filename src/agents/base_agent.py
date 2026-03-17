@@ -88,6 +88,7 @@ class BaseAgent:
         self._running = False
         self._memory_system = None
         self._llm_client = None  # OpenRouter LLM client
+        self._tool_manager = None  # Tool manager for real actions
 
     # ─── LLM / AI Integration ─────────────────────────────────────
 
@@ -124,6 +125,10 @@ class BaseAgent:
     def set_memory_system(self, memory_system):
         """Set the memory system for self-learning."""
         self._memory_system = memory_system
+
+    def set_tool_manager(self, tool_manager):
+        """Set the tool manager for real actions (code execution, file creation, etc.)."""
+        self._tool_manager = tool_manager
 
     def register_notification_callback(self, callback: Callable):
         """Register a callback for agent notifications."""

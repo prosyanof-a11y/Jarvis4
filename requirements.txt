@@ -24,3 +24,6 @@ pydantic==2.5.3
 
 # Web scraping
 beautifulsoup4==4.12.2
+
+# Presentations (optional, falls back to HTML if not installed)
+python-pptx==0.6.23

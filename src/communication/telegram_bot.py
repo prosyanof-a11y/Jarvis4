@@ -318,8 +318,12 @@ class AgentTelegramBot:
 
             # Check if result contains an image URL
             image_url = None
+            filepath = None
+            result_type = None
             if isinstance(result, dict):
                 image_url = result.get("image_url")
+                filepath = result.get("filepath")
+                result_type = result.get("type")
 
             if image_url:
                 # Send image
@@ -332,8 +336,35 @@ class AgentTelegramBot:
                     await update.message.reply_text(
                         f"✅ Изображение создано!\nURL: {image_url}"
                     )
+            elif filepath and result_type in ("presentation", "code"):
+                # Send file (presentation, code, etc.)
+                import os
+                if os.path.exists(filepath):
+                    try:
+                        result_text = result.get("result", "")
+                        if len(result_text) > 1000:
+                            result_text = result_text[:1000] + "..."
+                        await update.message.reply_text(f"✅ Готово!\n\n{result_text}")
+                        with open(filepath, 'rb') as f:
+                            fname = os.path.basename(filepath)
+                            await update.message.reply_document(
+                                document=f,
+                                filename=fname,
+                                caption=f"📎 {fname}"
+                            )
+                    except Exception as file_err:
+                        self.logger.error(f"File send error: {file_err}")
+                        result_text = result.get("result", str(result))
+                        if len(result_text) > 3500:
+                            result_text = result_text[:3500] + "...(обрезано)"
+                        await update.message.reply_text(f"✅ Готово!\n\n{result_text}")
+                else:
+                    result_text = result.get("result", str(result))
+                    if len(result_text) > 3500:
+                        result_text = result_text[:3500] + "...(обрезано)"
+                    await update.message.reply_text(f"✅ Готово!\n\n{result_text}")
             else:
-                result_text = str(result)
+                result_text = result.get("result", str(result)) if isinstance(result, dict) else str(result)
                 if len(result_text) > 3500:
                     result_text = result_text[:3500] + "...(обрезано)"
                 try:
@@ -441,24 +472,54 @@ class ControlPanelBot:
         asyncio.create_task(self._execute_and_reply(update, task))
 
     async def _execute_and_reply(self, update, task):
+        import os
         try:
             result = await self.task_engine.execute_task(task)
 
-            # Check for images in results
+            # Check for images and files in results
             if isinstance(result, dict):
                 for r in result.get("results", []):
                     res = r.get("result", {})
-                    if isinstance(res, dict) and res.get("image_url"):
-                        try:
-                            await update.message.reply_photo(
-                                photo=res["image_url"],
-                                caption=f"🎨 {r.get('agent', 'Artist')}: изображение"
-                            )
-                        except Exception:
-                            await update.message.reply_text(f"🎨 Изображение: {res['image_url']}")
+                    if isinstance(res, dict):
+                        # Send images
+                        if res.get("image_url"):
+                            try:
+                                await update.message.reply_photo(
+                                    photo=res["image_url"],
+                                    caption=f"🎨 {r.get('agent', 'Artist')}: изображение"
+                                )
+                            except Exception:
+                                await update.message.reply_text(f"🎨 Изображение: {res['image_url']}")
+
+                        # Send files (presentations, code)
+                        filepath = res.get("filepath")
+                        res_type = res.get("type")
+                        if filepath and res_type in ("presentation", "code") and os.path.exists(filepath):
+                            try:
+                                with open(filepath, 'rb') as f:
+                                    fname = os.path.basename(filepath)
+                                    await update.message.reply_document(
+                                        document=f,
+                                        filename=fname,
+                                        caption=f"📎 {r.get('agent', 'Agent')}: {fname}"
+                                    )
+                            except Exception as fe:
+                                logger.error(f"File send error: {fe}")
 
             # Send text result
-            text = str(result)
+            if isinstance(result, dict):
+                text = result.get("summary", str(result))
+                # Also include individual results text
+                for r in result.get("results", []):
+                    res = r.get("result", {})
+                    if isinstance(res, dict):
+                        res_text = res.get("result", "")
+                        if res_text and len(res_text) > 10:
+                            agent_name = r.get("agent", "Agent")
+                            text += f"\n\n**{agent_name}:**\n{res_text[:500]}"
+            else:
+                text = str(result)
+
             if len(text) > 3500:
                 text = text[:3500] + "..."
             try:

@@ -22,6 +22,7 @@ from src.agents.worker_agents import (
     DesignerAgent, ArtistAgent, MarketerAgent
 )
 from src.ai.llm_client import LLMClient
+from src.tools.tools import ToolManager
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class AgentManager:
     def __init__(self, memory_system=None, llm_client: LLMClient = None):
         self.memory_system = memory_system
         self.llm_client = llm_client
+        self.tool_manager = ToolManager()  # Central tool manager for all agents
         self.agents: Dict[str, BaseAgent] = {}
         self._initialized = False
         self._agent_tasks: List[asyncio.Task] = []
@@ -77,14 +79,21 @@ class AgentManager:
             for agent in self.agents.values():
                 agent.set_llm_client(self.llm_client)
 
+        # Set tool manager for all agents (enables real actions)
+        for agent in self.agents.values():
+            agent.set_tool_manager(self.tool_manager)
+
         self._initialized = True
-        logger.info(f"Initialized {len(self.agents)} agents")
+        logger.info(f"Initialized {len(self.agents)} agents with ToolManager")
 
     def register_agent(self, name: str, agent: BaseAgent):
         """Register a new agent (used by AgentFactory)."""
         self.agents[name] = agent
         if self.memory_system:
             agent.set_memory_system(self.memory_system)
+        if self.llm_client:
+            agent.set_llm_client(self.llm_client)
+        agent.set_tool_manager(self.tool_manager)
         logger.info(f"Registered new agent: {name}")
 
     async def start_all(self):

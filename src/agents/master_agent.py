@@ -95,43 +95,47 @@ class MasterAgent(BaseAgent):
         return final
 
     async def _send_subtask_result(self, agent_type: str, result):
-        """Send subtask result to Master's Telegram chat, including images."""
+        """Send subtask result to Master's Telegram chat, including images and files."""
         if not self._telegram_notifier:
             return
 
         try:
-            # Check for image URL in result
+            import os
+            # Check for image URL, file path in result
             image_url = None
+            filepath = None
+            result_type = None
             result_text = ""
 
             if isinstance(result, dict):
                 image_url = result.get("image_url")
+                filepath = result.get("filepath")
+                result_type = result.get("type")
                 result_text = result.get("result", str(result))
             else:
                 result_text = str(result)
 
+            bot = getattr(self._telegram_notifier, 'bot', None)
+            chat_ids = getattr(self._telegram_notifier, 'chat_ids', [])
+
             # Send image if available
-            if image_url and hasattr(self._telegram_notifier, 'bot') and self._telegram_notifier.bot:
-                for cid in self._telegram_notifier.chat_ids:
+            if image_url and bot:
+                for cid in chat_ids:
                     try:
                         if image_url.startswith("file://"):
-                            # Local file — send as document
                             file_path = image_url.replace("file://", "")
                             with open(file_path, 'rb') as f:
-                                await self._telegram_notifier.bot.send_photo(
+                                await bot.send_photo(
                                     chat_id=cid,
                                     photo=f,
                                     caption=f"🎨 {agent_type}: изображение создано"
                                 )
-                            # Clean up temp file
                             try:
-                                import os
                                 os.remove(file_path)
                             except Exception:
                                 pass
                         else:
-                            # URL — send directly
-                            await self._telegram_notifier.bot.send_photo(
+                            await bot.send_photo(
                                 chat_id=cid,
                                 photo=image_url,
                                 caption=f"🎨 {agent_type}: изображение создано"
@@ -139,12 +143,36 @@ class MasterAgent(BaseAgent):
                     except Exception as e:
                         self.logger.error(f"Send photo error: {e}")
                         try:
-                            await self._telegram_notifier.bot.send_message(
+                            await bot.send_message(
                                 chat_id=cid,
                                 text=f"🎨 {agent_type}: изображение создано (не удалось отправить фото)"
                             )
                         except Exception:
                             pass
+
+            # Send file (presentation, code) if available
+            elif filepath and result_type in ("presentation", "code") and bot and os.path.exists(filepath):
+                for cid in chat_ids:
+                    try:
+                        fname = os.path.basename(filepath)
+                        type_emoji = "📊" if result_type == "presentation" else "💻"
+                        with open(filepath, 'rb') as f:
+                            await bot.send_document(
+                                chat_id=cid,
+                                document=f,
+                                filename=fname,
+                                caption=f"{type_emoji} {agent_type}: {fname}"
+                            )
+                    except Exception as e:
+                        self.logger.error(f"Send file error: {e}")
+                        try:
+                            await bot.send_message(
+                                chat_id=cid,
+                                text=f"📁 {agent_type}: файл создан — {os.path.basename(filepath)}"
+                            )
+                        except Exception:
+                            pass
+
             else:
                 # Send text result
                 if len(result_text) > 3000:
@@ -162,9 +190,12 @@ class MasterAgent(BaseAgent):
 
         keyword_map = {
             "researcher": ["исследов", "research", "найти", "поиск", "search", "информац", "узнать"],
-            "programmer": ["код", "программ", "code", "develop", "скрипт", "api", "бот", "сайт", "приложен"],
+            "programmer": ["код", "программ", "code", "develop", "скрипт", "api", "бот", "сайт", "приложен",
+                           "python", "javascript", "js", "html", "css", "функц", "алгоритм", "автоматиз"],
             "analyst": ["анализ", "analys", "данн", "data", "статистик", "отчет", "report"],
-            "designer": ["дизайн", "design", "интерфейс", "ui", "ux", "макет", "layout"],
+            "designer": ["дизайн", "design", "интерфейс", "ui", "ux", "макет", "layout",
+                         "презентац", "presentation", "слайд", "slide", "pptx", "powerpoint",
+                         "доклад", "pitch", "питч"],
             "artist": ["изображ", "image", "картин", "рисун", "иллюстрац", "art", "фото"],
             "marketer": ["маркетинг", "market", "продвиж", "реклам", "пост", "контент", "seo"],
         }

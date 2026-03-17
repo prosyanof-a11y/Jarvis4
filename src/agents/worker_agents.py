@@ -75,7 +75,7 @@ class ResearcherAgent(BaseAgent):
 
 
 class ProgrammerAgent(BaseAgent):
-    """Writes code using code-specialized LLM."""
+    """Writes and EXECUTES code using code-specialized LLM + CodeExecutorTool."""
 
     def __init__(self):
         super().__init__(
@@ -83,6 +83,8 @@ class ProgrammerAgent(BaseAgent):
             role="Программист",
             capabilities=[
                 "Написание кода (Python, JS, и др.)",
+                "Выполнение Python-кода",
+                "Сохранение файлов в workspace",
                 "Отладка и исправление ошибок",
                 "Code review",
                 "Создание API",
@@ -92,27 +94,120 @@ class ProgrammerAgent(BaseAgent):
         )
         self._preferred_model = AGENT_MODELS["programmer"]
 
+    def _extract_code_blocks(self, text: str) -> list:
+        """Extract code blocks from LLM response."""
+        import re
+        # Match ```python ... ``` or ``` ... ```
+        pattern = r"```(?:python|py|javascript|js|bash|sh|html|css)?\n?(.*?)```"
+        blocks = re.findall(pattern, text, re.DOTALL)
+        return [b.strip() for b in blocks if b.strip()]
+
+    def _detect_language(self, code: str, task_desc: str) -> str:
+        """Detect programming language from code or task description."""
+        desc_lower = task_desc.lower()
+        if any(kw in desc_lower for kw in ["javascript", "js", "node", "react", "vue"]):
+            return "javascript"
+        if any(kw in desc_lower for kw in ["html", "css", "web", "сайт", "страниц"]):
+            return "html"
+        # Default to Python
+        return "python"
+
     async def _execute_task(self, task: Task) -> Any:
-        await self._report_progress(task, 0.2, "Анализ требований...")
+        await self._report_progress(task, 0.1, "Анализ требований...")
 
-        if self._llm_client:
-            await self._report_progress(task, 0.5, "Написание кода...")
-            result = await self.ask_llm(
-                f"Напиши код для: {task.description}",
-                system_prompt=(
-                    "Ты опытный программист. Пиши чистый, рабочий код. "
-                    "Добавляй комментарии. Используй лучшие практики. "
-                    "Если нужен Python — пиши на Python. Отвечай на русском с кодом."
-                ),
-                model=self._preferred_model
-            )
-            await self._report_progress(task, 0.9, "Код готов!")
-            return {"type": "code", "task": task.description, "result": result,
-                    "model": self._preferred_model, "timestamp": datetime.now().isoformat()}
+        if not self._llm_client:
+            return {"type": "code", "task": task.description,
+                    "result": f"[Programmer] Код для: {task.description}",
+                    "timestamp": datetime.now().isoformat()}
 
-        return {"type": "code", "task": task.description,
-                "result": f"[Programmer] Код для: {task.description}",
-                "timestamp": datetime.now().isoformat()}
+        await self._report_progress(task, 0.3, "Написание кода через AI...")
+
+        # Determine if we should execute or just write
+        desc_lower = task.description.lower()
+        should_execute = any(kw in desc_lower for kw in [
+            "выполни", "запусти", "run", "execute", "посчитай", "вычисли",
+            "calculate", "compute", "проверь", "test"
+        ])
+        should_save = any(kw in desc_lower for kw in [
+            "сохрани", "создай файл", "save", "write file", "скрипт", "script"
+        ])
+
+        # Generate code via LLM
+        code_response = await self.ask_llm(
+            f"Напиши код для следующей задачи. Верни ТОЛЬКО код в блоке ```python ... ```, "
+            f"без лишних объяснений до и после блока кода. Задача: {task.description}",
+            system_prompt=(
+                "Ты опытный программист. Пиши чистый, рабочий код. "
+                "Добавляй комментарии на русском. Используй лучшие практики. "
+                "ВАЖНО: Верни код в блоке ```python ... ```. "
+                "После блока кода можешь добавить краткое объяснение."
+            ),
+            model=self._preferred_model
+        )
+
+        await self._report_progress(task, 0.6, "Код написан, обрабатываю...")
+
+        # Extract code blocks
+        code_blocks = self._extract_code_blocks(code_response)
+        saved_files = []
+        execution_results = []
+
+        if code_blocks and self._tool_manager:
+            for i, code in enumerate(code_blocks):
+                # Save code to file
+                if should_save or True:  # Always save for reference
+                    lang = self._detect_language(code, task.description)
+                    ext_map = {"python": "py", "javascript": "js", "html": "html", "css": "css"}
+                    ext = ext_map.get(lang, "py")
+                    filename = f"code_{hash(task.description) % 10000}_{i}.{ext}"
+
+                    save_result = await self._tool_manager.file_writer.write_file(
+                        filename=filename,
+                        content=code
+                    )
+                    if save_result["success"]:
+                        saved_files.append(save_result["filepath"])
+                        await self._report_progress(task, 0.7, f"Файл сохранён: {filename}")
+
+                # Execute Python code if requested
+                if should_execute and self._detect_language(code, task.description) == "python":
+                    await self._report_progress(task, 0.8, "Выполняю код...")
+                    exec_result = await self._tool_manager.code_exec.execute_python(code)
+                    execution_results.append(exec_result)
+
+                    if exec_result.get("success"):
+                        await self._report_progress(task, 0.9, "Код выполнен успешно!")
+                    else:
+                        await self._report_progress(task, 0.9, f"Ошибка выполнения: {exec_result.get('stderr', '')[:100]}")
+
+        await self._report_progress(task, 0.95, "Формирую отчёт...")
+
+        result_data = {
+            "type": "code",
+            "task": task.description,
+            "result": code_response,
+            "code_blocks": code_blocks,
+            "saved_files": saved_files,
+            "execution_results": execution_results,
+            "model": self._preferred_model,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # Build human-readable summary
+        summary_parts = [code_response]
+        if saved_files:
+            summary_parts.append(f"\n\n📁 **Файлы сохранены:**\n" + "\n".join(f"• `{f}`" for f in saved_files))
+        if execution_results:
+            for er in execution_results:
+                if er.get("success"):
+                    out = er.get("stdout", "").strip()
+                    summary_parts.append(f"\n\n✅ **Результат выполнения:**\n```\n{out}\n```" if out else "\n\n✅ Код выполнен успешно (нет вывода)")
+                else:
+                    err = er.get("stderr", er.get("error", "Неизвестная ошибка"))
+                    summary_parts.append(f"\n\n❌ **Ошибка выполнения:**\n```\n{err}\n```")
+
+        result_data["result"] = "".join(summary_parts)
+        return result_data
 
 
 class AnalystAgent(BaseAgent):
@@ -157,7 +252,7 @@ class AnalystAgent(BaseAgent):
 
 
 class DesignerAgent(BaseAgent):
-    """Creates designs using creative LLM."""
+    """Creates designs, presentations, and HTML mockups using creative LLM + PresentationTool."""
 
     def __init__(self):
         super().__init__(
@@ -165,6 +260,7 @@ class DesignerAgent(BaseAgent):
             role="Дизайнер",
             capabilities=[
                 "UI/UX дизайн",
+                "Создание презентаций (HTML/PPTX)",
                 "Создание макетов",
                 "Прототипирование",
                 "Дизайн-системы",
@@ -174,27 +270,135 @@ class DesignerAgent(BaseAgent):
         )
         self._preferred_model = AGENT_MODELS["designer"]
 
+    def _is_presentation_task(self, desc: str) -> bool:
+        """Check if task is about creating a presentation."""
+        keywords = [
+            "презентац", "presentation", "слайд", "slide", "pptx", "powerpoint",
+            "доклад", "report", "pitch", "питч"
+        ]
+        return any(kw in desc.lower() for kw in keywords)
+
     async def _execute_task(self, task: Task) -> Any:
-        await self._report_progress(task, 0.2, "Изучение требований...")
+        await self._report_progress(task, 0.1, "Изучение требований...")
 
-        if self._llm_client:
-            await self._report_progress(task, 0.5, "Создание концепции...")
-            result = await self.ask_llm(
-                f"Создай дизайн-концепцию: {task.description}",
-                system_prompt=(
-                    "Ты UI/UX дизайнер. Опиши дизайн-концепцию подробно: "
-                    "цвета, шрифты, layout, компоненты, UX-решения. "
-                    "Если нужен код — дай HTML/CSS. Отвечай на русском."
-                ),
-                model=self._preferred_model
+        if not self._llm_client:
+            return {"type": "design", "task": task.description,
+                    "result": f"[Designer] Дизайн: {task.description}",
+                    "timestamp": datetime.now().isoformat()}
+
+        # Check if it's a presentation task
+        if self._is_presentation_task(task.description):
+            return await self._create_presentation(task)
+
+        # Regular design task
+        await self._report_progress(task, 0.4, "Создание концепции...")
+        result = await self.ask_llm(
+            f"Создай дизайн-концепцию: {task.description}",
+            system_prompt=(
+                "Ты UI/UX дизайнер. Опиши дизайн-концепцию подробно: "
+                "цвета, шрифты, layout, компоненты, UX-решения. "
+                "Если нужен код — дай HTML/CSS. Отвечай на русском."
+            ),
+            model=self._preferred_model
+        )
+        await self._report_progress(task, 0.9, "Дизайн готов!")
+        return {"type": "design", "task": task.description, "result": result,
+                "model": self._preferred_model, "timestamp": datetime.now().isoformat()}
+
+    async def _create_presentation(self, task: Task) -> Any:
+        """Create a real presentation file."""
+        await self._report_progress(task, 0.2, "Генерирую структуру презентации...")
+
+        # Ask LLM to generate slide content in JSON format
+        slides_json = await self.ask_llm(
+            f"Создай структуру презентации для: {task.description}\n\n"
+            f"Верни JSON-массив слайдов в формате:\n"
+            f'[{{"title": "Заголовок слайда", "content": "Содержание слайда"}}, ...]\n'
+            f"Создай 5-8 слайдов. Верни ТОЛЬКО JSON без пояснений.",
+            system_prompt=(
+                "Ты профессиональный дизайнер презентаций. "
+                "Создавай структурированные, информативные презентации. "
+                "Отвечай ТОЛЬКО валидным JSON-массивом."
+            ),
+            model=self._preferred_model
+        )
+
+        await self._report_progress(task, 0.5, "Создаю файл презентации...")
+
+        # Parse slides
+        import json
+        import re
+        slides = []
+        try:
+            # Extract JSON from response
+            json_match = re.search(r'\[.*\]', slides_json, re.DOTALL)
+            if json_match:
+                slides = json.loads(json_match.group())
+        except Exception as e:
+            logger.warning(f"Failed to parse slides JSON: {e}")
+            # Fallback: create basic slides from text
+            lines = slides_json.strip().split('\n')
+            for i, line in enumerate(lines[:8]):
+                if line.strip():
+                    slides.append({"title": f"Слайд {i+1}", "content": line.strip()})
+
+        if not slides:
+            slides = [
+                {"title": "Введение", "content": task.description},
+                {"title": "Основные моменты", "content": "Ключевые аспекты темы"},
+                {"title": "Заключение", "content": "Выводы и рекомендации"}
+            ]
+
+        # Extract title from task description
+        title = task.description[:60] if len(task.description) > 60 else task.description
+        # Clean up title
+        for prefix in ["создай презентацию", "сделай презентацию", "presentation about", "create presentation"]:
+            if prefix in title.lower():
+                title = title[title.lower().index(prefix) + len(prefix):].strip(" :о")
+                break
+
+        # Create presentation file
+        if self._tool_manager:
+            await self._report_progress(task, 0.7, "Сохраняю файл...")
+
+            # Try PPTX first, fallback to HTML
+            pptx_result = await self._tool_manager.presentation.create_pptx_presentation(
+                title=title or "Презентация",
+                slides=slides
             )
-            await self._report_progress(task, 0.9, "Дизайн готов!")
-            return {"type": "design", "task": task.description, "result": result,
-                    "model": self._preferred_model, "timestamp": datetime.now().isoformat()}
 
-        return {"type": "design", "task": task.description,
-                "result": f"[Designer] Дизайн: {task.description}",
-                "timestamp": datetime.now().isoformat()}
+            if pptx_result["success"]:
+                filepath = pptx_result["filepath"]
+                fmt = pptx_result["format"]
+                await self._report_progress(task, 0.95, f"Презентация создана ({fmt})!")
+
+                return {
+                    "type": "presentation",
+                    "task": task.description,
+                    "result": (
+                        f"✅ Презентация создана!\n\n"
+                        f"📊 **Формат:** {fmt.upper()}\n"
+                        f"📁 **Файл:** `{filepath}`\n"
+                        f"🎯 **Слайдов:** {pptx_result['slides_count']}\n\n"
+                        f"Слайды:\n" + "\n".join(f"• {s.get('title', '')}" for s in slides)
+                    ),
+                    "filepath": filepath,
+                    "slides_count": pptx_result["slides_count"],
+                    "format": fmt,
+                    "model": self._preferred_model,
+                    "timestamp": datetime.now().isoformat()
+                }
+
+        # Fallback: return text description
+        await self._report_progress(task, 0.95, "Презентация готова (текстовый формат)!")
+        slides_text = "\n".join(f"**{s.get('title', '')}**\n{s.get('content', '')}" for s in slides)
+        return {
+            "type": "presentation",
+            "task": task.description,
+            "result": f"📊 Структура презентации '{title}':\n\n{slides_text}",
+            "model": self._preferred_model,
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 class ArtistAgent(BaseAgent):
