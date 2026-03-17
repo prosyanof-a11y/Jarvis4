@@ -2,65 +2,60 @@
 """
 JARVIS4 AI OFFICE — Launch Script
 
-Opens the visual office dashboard in the browser
-and starts the backend server in the background.
-
-This does NOT interfere with cloud operations —
-the dashboard is a read-only monitoring interface
-that connects via WebSocket/API.
+Starts a local HTTP server for the 3D office and opens it in the browser.
+This avoids CORS issues when connecting to Railway cloud API.
 """
 
 import os
 import sys
 import subprocess
 import webbrowser
+import threading
 import time
 from pathlib import Path
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 PROJECT_DIR = Path(__file__).parent.resolve()
-OFFICE_HTML = PROJECT_DIR / "frontend" / "office3d.html"  # 3D version
-OFFICE_HTML_2D = PROJECT_DIR / "frontend" / "office.html"  # 2D fallback
-RUN_SCRIPT = PROJECT_DIR / "run.py"
+FRONTEND_DIR = PROJECT_DIR / "frontend"
+PORT = 3000
+
+
+class QuietHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass  # Suppress logs
+
+
+def start_server():
+    os.chdir(str(FRONTEND_DIR))
+    server = HTTPServer(("localhost", PORT), QuietHandler)
+    server.serve_forever()
 
 
 def main():
     print("=" * 50)
-    print("  🏢 JARVIS4 AI OFFICE — Запуск")
+    print("  JARVIS4 AI OFFICE")
     print("=" * 50)
 
-    # 1. Open the office dashboard in browser
-    print("\n[1] Открываю визуальный офис...")
-    office_url = OFFICE_HTML.as_uri()
-    webbrowser.open(office_url)
-    print(f"    → {office_url}")
+    # Start local HTTP server for frontend
+    print(f"\n[1] Starting local server on http://localhost:{PORT}")
+    thread = threading.Thread(target=start_server, daemon=True)
+    thread.start()
+    time.sleep(0.5)
 
-    # 2. Start backend server in background
-    print("\n[2] Запускаю бэкенд сервер...")
+    # Open in browser
+    url = f"http://localhost:{PORT}/office3d.html"
+    print(f"[2] Opening 3D Office: {url}")
+    webbrowser.open(url)
+
+    print(f"\n  Office is running at: {url}")
+    print(f"  Connected to cloud: https://jarvis4-production-22c6.up.railway.app")
+    print(f"\n  Press Ctrl+C to stop")
+
     try:
-        # Start run.py as a background process
-        if sys.platform == "win32":
-            proc = subprocess.Popen(
-                [sys.executable, str(RUN_SCRIPT)],
-                cwd=str(PROJECT_DIR),
-                creationflags=subprocess.CREATE_NEW_CONSOLE
-            )
-        else:
-            proc = subprocess.Popen(
-                [sys.executable, str(RUN_SCRIPT)],
-                cwd=str(PROJECT_DIR),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-        print(f"    → Сервер запущен (PID: {proc.pid})")
-    except Exception as e:
-        print(f"    ⚠ Не удалось запустить сервер: {e}")
-        print("    → Офис работает в автономном режиме")
-
-    print("\n" + "=" * 50)
-    print("  ✅ Офис Jarvis4 открыт!")
-    print("  📡 Дашборд подключится к серверу автоматически")
-    print("  🌐 Облачная работа агентов не прерывается")
-    print("=" * 50)
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
 
 if __name__ == "__main__":
