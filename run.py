@@ -22,10 +22,19 @@ from src.memory.memory_system import MemorySystem
 from src.core.agent_manager import AgentManager
 from src.core.task_engine import TaskEngine
 from src.communication.telegram_bot import TelegramBotManager
-from src.voice.voice_system import VoiceSystem
-from src.security.security_manager import SecurityManager
 from src.ai.llm_client import LLMClient
 from src.api.server import app as fastapi_app, set_dependencies
+
+# Optional imports
+try:
+    from src.voice.voice_system import VoiceSystem
+except Exception:
+    VoiceSystem = None
+
+try:
+    from src.security.security_manager import SecurityManager
+except Exception:
+    SecurityManager = None
 
 # Logging
 os.makedirs("data/logs", exist_ok=True)
@@ -58,7 +67,7 @@ class Jarvis4System:
             self.agent_manager, self.task_engine, settings
         )
         self.voice = None
-        if settings.VOICE_ENABLED:
+        if settings.VOICE_ENABLED and VoiceSystem:
             try:
                 self.voice = VoiceSystem(settings.VOICE_LANGUAGE, settings.TTS_ENGINE)
             except Exception:
