@@ -81,13 +81,13 @@ class Settings:
         # Falls back to defaults if not set
         self.AGENT_MODELS = {
             "master": os.getenv("AGENT_MASTER_MODEL", "anthropic/claude-3.5-sonnet"),
-            "project_manager": os.getenv("AGENT_PROJECT_MANAGER_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
-            "researcher": os.getenv("AGENT_RESEARCHER_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
-            "programmer": os.getenv("AGENT_PROGRAMMER_MODEL", "deepseek/deepseek-coder"),
-            "analyst": os.getenv("AGENT_ANALYST_MODEL", "meta-llama/llama-3.1-70b-instruct"),
-            "designer": os.getenv("AGENT_DESIGNER_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
-            "artist": os.getenv("AGENT_ARTIST_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
-            "marketer": os.getenv("AGENT_MARKETER_MODEL", "mistralai/mistral-7b-instruct:free"),
+            "project_manager": os.getenv("AGENT_PROJECT_MANAGER_MODEL", "google/gemini-2.0-flash-001"),
+            "researcher": os.getenv("AGENT_RESEARCHER_MODEL", "google/gemini-2.0-flash-001"),
+            "programmer": os.getenv("AGENT_PROGRAMMER_MODEL", "deepseek/deepseek-chat"),
+            "analyst": os.getenv("AGENT_ANALYST_MODEL", "google/gemini-2.0-flash-001"),
+            "designer": os.getenv("AGENT_DESIGNER_MODEL", "google/gemini-2.0-flash-001"),
+            "artist": os.getenv("AGENT_ARTIST_MODEL", "google/gemini-2.0-flash-001"),
+            "marketer": os.getenv("AGENT_MARKETER_MODEL", "google/gemini-2.0-flash-001"),
         }
 
         # ─── Logging ──────────────────────────────

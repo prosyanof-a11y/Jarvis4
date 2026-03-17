@@ -27,14 +27,14 @@ try:
 except ImportError:
     # Fallback defaults if settings not available
     AGENT_MODELS = {
-        "researcher": "meta-llama/llama-3.1-8b-instruct:free",
-        "programmer": "deepseek/deepseek-coder",
-        "analyst": "meta-llama/llama-3.1-70b-instruct",
-        "designer": "meta-llama/llama-3.1-8b-instruct:free",
-        "artist": "meta-llama/llama-3.1-8b-instruct:free",
-        "marketer": "mistralai/mistral-7b-instruct:free",
+        "researcher": "google/gemini-2.0-flash-001",
+        "programmer": "deepseek/deepseek-chat",
+        "analyst": "google/gemini-2.0-flash-001",
+        "designer": "google/gemini-2.0-flash-001",
+        "artist": "google/gemini-2.0-flash-001",
+        "marketer": "google/gemini-2.0-flash-001",
         "master": "anthropic/claude-3.5-sonnet",
-        "project_manager": "meta-llama/llama-3.1-8b-instruct:free",
+        "project_manager": "google/gemini-2.0-flash-001",
     }
 
 

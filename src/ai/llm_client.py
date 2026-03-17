@@ -71,16 +71,13 @@ AVAILABLE_MODELS = {
     # DeepSeek
     "deepseek-chat": "deepseek/deepseek-chat",
     "deepseek-r1": "deepseek/deepseek-r1",
-    "deepseek-coder": "deepseek/deepseek-coder",
 
     # Qwen
     "qwen-2.5-72b": "qwen/qwen-2.5-72b-instruct",
     "qwen-2.5-coder-32b": "qwen/qwen-2.5-coder-32b-instruct",
 
-    # Free models (for testing)
-    "free-gpt-3.5": "openai/gpt-3.5-turbo",
-    "free-llama": "meta-llama/llama-3.1-8b-instruct:free",
-    "free-mistral": "mistralai/mistral-7b-instruct:free",
+    # Good cheap/free options
+    "gemini-flash": "google/gemini-2.0-flash-001",
 }
 
 DEFAULT_MODEL = "anthropic/claude-3.5-sonnet"
