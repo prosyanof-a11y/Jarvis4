@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS4 AI OFFICE</title>
+    <link rel="icon" type="image/svg+xml" href="assets/jarvis-icon.svg">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --bg-dark: #0a0a1a;
+            --bg-card: #111128;
+            --bg-card-hover: #1a1a3e;
+            --accent: #00d4ff;
+            --accent-red: #c0392b;
+            --accent-gold: #f5c518;
+            --text: #e0e0e0;
+            --text-dim: #888;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --error: #e74c3c;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ─── Header ─────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, #0d0d2b 0%, #1a0a0a 100%);
+            border-bottom: 2px solid var(--accent-red);
+            padding: 15px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo {
+            width: 50px;
+            height: 50px;
+            filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.5));
+        }
+
+        .header h1 {
+            font-size: 24px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 2px;
+        }
+
+        .header h1 span {
+            font-size: 12px;
+            letter-spacing: 0;
+            display: block;
+            background: none;
+            -webkit-text-fill-color: var(--text-dim);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid var(--success);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 5px var(--success); }
+            50% { opacity: 0.5; box-shadow: 0 0 15px var(--success); }
+        }
+
+        /* ─── Main Layout ────────────────────────── */
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* ─── Office Room ────────────────────────── */
+        .office-room {
+            background: linear-gradient(180deg, #0d0d2b 0%, #0a0a1a 100%);
+            border: 1px solid #222;
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 500px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .office-room h2 {
+            color: var(--accent);
+            margin-bottom: 20px;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .office-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .agent-desk {
+            background: var(--bg-card);
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .agent-desk:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.1);
+        }
+
+        .agent-desk.master {
+            grid-column: span 3;
+            background: linear-gradient(135deg, #1a0a0a 0%, #111128 100%);
+            border-color: var(--accent-gold);
+        }
+
+        .agent-desk.master:hover {
+            border-color: var(--accent-gold);
+            box-shadow: 0 5px 20px rgba(245, 197, 24, 0.2);
+        }
+
+        .agent-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 0 auto 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            border: 2px solid #444;
+        }
+
+        .agent-desk.master .agent-avatar {
+            width: 70px;
+            height: 70px;
+            font-size: 34px;
+            border-color: var(--accent-gold);
+        }
+
+        .agent-name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .agent-role {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        .agent-state {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .state-idle { background: rgba(136,136,136,0.2); color: #aaa; }
+        .state-thinking { background: rgba(155,89,182,0.2); color: #bb6bd9; }
+        .state-working { background: rgba(0,212,255,0.2); color: var(--accent); }
+        .state-finished { background: rgba(46,204,113,0.2); color: var(--success); }
+        .state-error { background: rgba(231,76,60,0.2); color: var(--error); }
+
+        .agent-task {
+            font-size: 11px;
+            color: var(--accent);
+            margin-top: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Working animation */
+        .agent-desk.is-working::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            animation: working-bar 2s infinite;
+        }
+
+        @keyframes working-bar {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        /* ─── Right Panel ────────────────────────── */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* ─── Command Input ──────────────────────── */
+        .command-panel {
+            background: var(--bg-card);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .command-panel h3 {
+            color: var(--accent-gold);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .command-input-wrap {
+            display: flex;
+            gap: 8px;
+        }
+
+        .command-input {
+            flex: 1;
+            background: #0a0a1a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text);
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .command-input:focus {
+            border-color: var(--accent);
+        }
+
+        .command-input::placeholder {
+            color: #555;
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, var(--accent-red), #8b0000);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 18px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(192, 57, 43, 0.5);
+        }
+
+        .agent-select {
+            width: 100%;
+            background: #0a0a1a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text);
+            font-size: 12px;
+            margin-bottom: 8px;
+            outline: none;
+        }
+
+        /* ─── Activity Log ───────────────────────── */
+        .activity-log {
+            background: var(--bg-card);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 15px;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .activity-log h3 {
+            color: var(--accent);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .log-entries {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .log-entry {
+            padding: 8px 10px;
+            border-left: 3px solid #333;
+            margin-bottom: 6px;
+            font-size: 12px;
+            border-radius: 0 6px 6px 0;
+            background: rgba(255,255,255,0.02);
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .log-entry.received { border-color: var(--accent); }
+        .log-entry.progress { border-color: var(--warning); }
+        .log-entry.completed { border-color: var(--success); }
+        .log-entry.error { border-color: var(--error); }
+
+        .log-time {
+            color: var(--text-dim);
+            font-size: 10px;
+        }
+
+        .log-agent {
+            color: var(--accent-gold);
+            font-weight: 600;
+        }
+
+        /* ─── Stats Bar ──────────────────────────── */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            padding: 0 20px 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        /* ─── Scrollbar ──────────────────────────── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* ─── Responsive ─────────────────────────── */
+        @media (max-width: 900px) {
+            .main { grid-template-columns: 1fr; }
+            .office-grid { grid-template-columns: repeat(2, 1fr); }
+            .agent-desk.master { grid-column: span 2; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-left">
+        <img src="assets/jarvis-icon.svg" alt="Jarvis" class="logo">
+        <h1>JARVIS4 AI OFFICE
+            <span>Autonomous AI Organization</span>
+        </h1>
+    </div>
+    <div class="status-indicator">
+        <div class="status-dot"></div>
+        <span id="connectionStatus">Подключение...</span>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar">
+    <div class="stat-card">
+        <div class="stat-value" id="statAgents">9</div>
+        <div class="stat-label">Агентов</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statActive">0</div>
+        <div class="stat-label">Активных</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statCompleted">0</div>
+        <div class="stat-label">Выполнено</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statUptime">0m</div>
+        <div class="stat-label">Аптайм</div>
+    </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+    <!-- Office Room -->
+    <div class="office-room">
+        <h2>🏢 Офис</h2>
+        <div class="office-grid" id="officeGrid">
+            <!-- Master desk -->
+            <div class="agent-desk master" data-agent="master">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #c0392b, #8b0000);">🎯</div>
+                <div class="agent-name">Master Agent</div>
+                <div class="agent-role">Главный управляющий</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- PM -->
+            <div class="agent-desk" data-agent="project_manager">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #2980b9, #1a5276);">📋</div>
+                <div class="agent-name">Project Manager</div>
+                <div class="agent-role">Менеджер проектов</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- Factory -->
+            <div class="agent-desk" data-agent="agent_factory">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #8e44ad, #6c3483);">🏭</div>
+                <div class="agent-name">Agent Factory</div>
+                <div class="agent-role">Фабрика агентов</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- Researcher -->
+            <div class="agent-desk" data-agent="researcher">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #27ae60, #1e8449);">🔍</div>
+                <div class="agent-name">Researcher</div>
+                <div class="agent-role">Исследователь</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- Programmer -->
+            <div class="agent-desk" data-agent="programmer">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #2c3e50, #1a252f);">💻</div>
+                <div class="agent-name">Programmer</div>
+                <div class="agent-role">Программист</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- Analyst -->
+            <div class="agent-desk" data-agent="analyst">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #e67e22, #d35400);">📊</div>
+                <div class="agent-name">Analyst</div>
+                <div class="agent-role">Аналитик</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- Designer -->
+            <div class="agent-desk" data-agent="designer">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #e91e63, #ad1457);">🎨</div>
+                <div class="agent-name">Designer</div>
+                <div class="agent-role">Дизайнер</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- Artist -->
+            <div class="agent-desk" data-agent="artist">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #9b59b6, #7d3c98);">🖼</div>
+                <div class="agent-name">Artist</div>
+                <div class="agent-role">Художник</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+            <!-- Marketer -->
+            <div class="agent-desk" data-agent="marketer">
+                <div class="agent-avatar" style="background: linear-gradient(135deg, #1abc9c, #16a085);">📢</div>
+                <div class="agent-name">Marketer</div>
+                <div class="agent-role">Маркетолог</div>
+                <div class="agent-state state-idle">IDLE</div>
+                <div class="agent-task"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="right-panel">
+        <!-- Command Input -->
+        <div class="command-panel">
+            <h3>⚡ Командный центр</h3>
+            <select class="agent-select" id="agentSelect">
+                <option value="">Master Agent (авто)</option>
+                <option value="researcher">Researcher</option>
+                <option value="programmer">Programmer</option>
+                <option value="analyst">Analyst</option>
+                <option value="designer">Designer</option>
+                <option value="artist">Artist</option>
+                <option value="marketer">Marketer</option>
+            </select>
+            <div class="command-input-wrap">
+                <input type="text" class="command-input" id="commandInput" 
+                       placeholder="Введите задачу..." 
+                       onkeypress="if(event.key==='Enter')sendCommand()">
+                <button class="send-btn" onclick="sendCommand()">▶</button>
+            </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="activity-log">
+            <h3>📜 Журнал активности</h3>
+            <div class="log-entries" id="logEntries">
+                <div class="log-entry received">
+                    <span class="log-time">--:--:--</span>
+                    <span class="log-agent">System</span>: Офис Jarvis4 запущен. Ожидание подключения к серверу...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ─── State ────────────────────────────────────
+    let ws = null;
+    let completedCount = 0;
+    const startTime = Date.now();
+
+    // ─── WebSocket Connection ─────────────────────
+    function connectWebSocket() {
+        const wsUrl = 'ws://localhost:8765';
+        try {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                document.getElementById('connectionStatus').textContent = 'Онлайн';
+                addLog('System', 'Подключено к серверу Jarvis4', 'completed');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                } catch (e) {
+                    console.error('Parse error:', e);
+                }
+            };
+
+            ws.onclose = () => {
+                document.getElementById('connectionStatus').textContent = 'Офлайн';
+                addLog('System', 'Соединение потеряно. Переподключение...', 'error');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            ws.onerror = () => {
+                document.getElementById('connectionStatus').textContent = 'Ошибка';
+            };
+        } catch (e) {
+            document.getElementById('connectionStatus').textContent = 'Нет сервера';
+            addLog('System', 'Сервер недоступен. Работа в автономном режиме.', 'error');
+        }
+    }
+
+    // ─── Handle Messages ──────────────────────────
+    function handleMessage(data) {
+        if (data.type === 'status_update' || data.type === 'init') {
+            updateAgents(data.agents || []);
+        } else if (data.type === 'notification') {
+            const d = data.data || {};
+            addLog(data.agent_name || 'Agent', d.message || data.type, getLogClass(data.type));
+        }
+    }
+
+    function updateAgents(agents) {
+        let activeCount = 0;
+        agents.forEach(agent => {
+            const name = agent.name || '';
+            const desk = document.querySelector(`[data-agent="${name.toLowerCase()}"]`) ||
+                         document.querySelector(`[data-agent="${name}"]`);
+            if (!desk) return;
+
+            const stateEl = desk.querySelector('.agent-state');
+            const taskEl = desk.querySelector('.agent-task');
+            const state = agent.state || 'idle';
+
+            stateEl.className = `agent-state state-${state}`;
+            stateEl.textContent = state.toUpperCase();
+
+            if (state === 'working' || state === 'thinking') {
+                desk.classList.add('is-working');
+                activeCount++;
+            } else {
+                desk.classList.remove('is-working');
+            }
+
+            taskEl.textContent = agent.current_task || '';
+        });
+
+        document.getElementById('statActive').textContent = activeCount;
+        document.getElementById('statAgents').textContent = agents.length || 9;
+    }
+
+    function getLogClass(type) {
+        if (type.includes('completed') || type.includes('finished')) return 'completed';
+        if (type.includes('error')) return 'error';
+        if (type.includes('progress')) return 'progress';
+        return 'received';
+    }
+
+    // ─── Send Command ─────────────────────────────
+    async function sendCommand() {
+        const input = document.getElementById('commandInput');
+        const select = document.getElementById('agentSelect');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const agent = select.value;
+        addLog('Вы', text, 'received');
+        input.value = '';
+
+        // Try API first
+        try {
+            const url = agent 
+                ? 'http://localhost:8000/assign'
+                : 'http://localhost:8000/task';
+            const body = agent 
+                ? { agent_name: agent, description: text }
+                : { description: text };
+
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                addLog('System', `Задача создана: ${data.task_id || 'OK'}`, 'completed');
+                completedCount++;
+                document.getElementById('statCompleted').textContent = completedCount;
+            } else {
+                addLog('System', `Ошибка API: ${resp.status}`, 'error');
+            }
+        } catch (e) {
+            addLog('System', 'API недоступен. Задача сохранена локально.', 'error');
+        }
+    }
+
+    // ─── Activity Log ─────────────────────────────
+    function addLog(agent, message, cls = 'received') {
+        const log = document.getElementById('logEntries');
+        const time = new Date().toLocaleTimeString('ru-RU');
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${cls}`;
+        entry.innerHTML = `<span class="log-time">${time}</span> <span class="log-agent">${agent}</span>: ${message}`;
+        log.appendChild(entry);
+        log.scrollTop = log.scrollHeight;
+
+        // Keep last 100 entries
+        while (log.children.length > 100) {
+            log.removeChild(log.firstChild);
+        }
+    }
+
+    // ─── Uptime Counter ───────────────────────────
+    setInterval(() => {
+        const mins = Math.floor((Date.now() - startTime) / 60000);
+        const hrs = Math.floor(mins / 60);
+        document.getElementById('statUptime').textContent = 
+            hrs > 0 ? `${hrs}h ${mins % 60}m` : `${mins}m`;
+    }, 10000);
+
+    // ─── Agent Click ──────────────────────────────
+    document.querySelectorAll('.agent-desk').forEach(desk => {
+        desk.addEventListener('click', () => {
+            const agent = desk.dataset.agent;
+            const select = document.getElementById('agentSelect');
+            const input = document.getElementById('commandInput');
+            
+            // Set agent in selector
+            for (let opt of select.options) {
+                if (opt.value === agent) {
+                    select.value = agent;
+                    break;
+                }
+            }
+            input.focus();
+            input.placeholder = `Задача для ${desk.querySelector('.agent-name').textContent}...`;
+        });
+    });
+
+    // ─── Init ─────────────────────────────────────
+    connectWebSocket();
+    addLog('System', 'Офис Jarvis4 AI Office загружен', 'completed');
+</script>
+
+</body>
+</html>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="helmet" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#c0392b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b0000;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="face" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5c518;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d4a017;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="eye-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00d4ff;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="250" fill="#1a1a2e" stroke="#c0392b" stroke-width="4"/>
+  
+  <!-- Helmet top -->
+  <path d="M256 60 C160 60 90 140 90 240 L90 280 C90 290 95 295 100 295 L180 295 L180 220 C180 160 210 110 256 100 C302 110 332 160 332 220 L332 295 L412 295 C417 295 422 290 422 280 L422 240 C422 140 352 60 256 60Z" fill="url(#helmet)"/>
+  
+  <!-- Face plate -->
+  <path d="M180 220 L180 380 C180 420 210 450 256 460 C302 450 332 420 332 380 L332 220 C332 160 302 120 256 110 C210 120 180 160 180 220Z" fill="url(#face)"/>
+  
+  <!-- Face plate center line -->
+  <line x1="256" y1="110" x2="256" y2="460" stroke="#b8860b" stroke-width="2" opacity="0.5"/>
+  
+  <!-- Left eye -->
+  <path d="M195 230 L240 210 L240 270 L195 290Z" fill="#1a1a2e"/>
+  <path d="M200 235 L235 218 L235 265 L200 282Z" fill="url(#eye-glow)" filter="url(#glow)" opacity="0.9"/>
+  
+  <!-- Right eye -->
+  <path d="M317 230 L272 210 L272 270 L317 290Z" fill="#1a1a2e"/>
+  <path d="M312 235 L277 218 L277 265 L312 282Z" fill="url(#eye-glow)" filter="url(#glow)" opacity="0.9"/>
+  
+  <!-- Mouth area -->
+  <rect x="220" y="340" width="72" height="6" rx="3" fill="#b8860b" opacity="0.6"/>
+  <rect x="210" y="355" width="92" height="6" rx="3" fill="#b8860b" opacity="0.5"/>
+  <rect x="215" y="370" width="82" height="6" rx="3" fill="#b8860b" opacity="0.4"/>
+  <rect x="225" y="385" width="62" height="6" rx="3" fill="#b8860b" opacity="0.3"/>
+  
+  <!-- Helmet side details -->
+  <path d="M90 260 L130 260 L130 280 L90 280Z" fill="#8b0000" opacity="0.7"/>
+  <path d="M382 260 L422 260 L422 280 L382 280Z" fill="#8b0000" opacity="0.7"/>
+  
+  <!-- Arc reactor glow at chin -->
+  <circle cx="256" cy="430" r="12" fill="#00d4ff" filter="url(#glow)" opacity="0.6"/>
+  <circle cx="256" cy="430" r="6" fill="#ffffff" opacity="0.8"/>
+</svg>
