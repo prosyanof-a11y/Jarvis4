@@ -451,37 +451,69 @@ class ArtistAgent(BaseAgent):
                 "timestamp": datetime.now().isoformat()}
 
     async def _generate_image(self, prompt: str) -> str:
-        """Generate image and save to temp file. Returns file:// path."""
+        """Generate image using multiple providers. Returns file:// path or URL."""
         import aiohttp
         import tempfile
+        import urllib.parse
 
-        # 1. HuggingFace Inference API (FREE, no key needed for some models)
-        hf_token = os.getenv("HF_TOKEN", "")
+        # 1. Pollinations.ai — FREE, no key needed, always works
         try:
-            headers = {"Content-Type": "application/json"}
-            if hf_token:
-                headers["Authorization"] = f"Bearer {hf_token}"
+            encoded = urllib.parse.quote(prompt)
+            poll_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
-                    headers=headers,
-                    json={"inputs": prompt},
-                    timeout=aiohttp.ClientTimeout(total=120)
+                async with session.get(
+                    poll_url,
+                    timeout=aiohttp.ClientTimeout(total=60),
+                    allow_redirects=True
                 ) as resp:
-                    if resp.status == 200 and resp.content_type.startswith("image"):
+                    if resp.status == 200 and resp.content_type and resp.content_type.startswith("image"):
                         img_bytes = await resp.read()
                         if len(img_bytes) > 1000:
                             fd, path = tempfile.mkstemp(suffix='.png')
                             with os.fdopen(fd, 'wb') as f:
                                 f.write(img_bytes)
-                            logger.info(f"Image generated via HuggingFace: {path}")
+                            logger.info(f"Image generated via Pollinations.ai: {path}")
                             return f"file://{path}"
                     else:
-                        logger.warning(f"HuggingFace: status={resp.status}")
+                        logger.warning(f"Pollinations: status={resp.status}, type={resp.content_type}")
+        except Exception as e:
+            logger.warning(f"Pollinations image: {e}")
+
+        # 2. HuggingFace Inference API (FREE with token)
+        hf_token = os.getenv("HF_TOKEN", "")
+        try:
+            headers = {"Content-Type": "application/json"}
+            if hf_token:
+                headers["Authorization"] = f"Bearer {hf_token}"
+            hf_models = [
+                "stabilityai/stable-diffusion-xl-base-1.0",
+                "runwayml/stable-diffusion-v1-5",
+            ]
+            for hf_model in hf_models:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            f"https://api-inference.huggingface.co/models/{hf_model}",
+                            headers=headers,
+                            json={"inputs": prompt},
+                            timeout=aiohttp.ClientTimeout(total=120)
+                        ) as resp:
+                            if resp.status == 200 and resp.content_type and resp.content_type.startswith("image"):
+                                img_bytes = await resp.read()
+                                if len(img_bytes) > 1000:
+                                    fd, path = tempfile.mkstemp(suffix='.png')
+                                    with os.fdopen(fd, 'wb') as f:
+                                        f.write(img_bytes)
+                                    logger.info(f"Image generated via HuggingFace ({hf_model}): {path}")
+                                    return f"file://{path}"
+                            else:
+                                logger.warning(f"HuggingFace {hf_model}: status={resp.status}")
+                except Exception as e:
+                    logger.warning(f"HuggingFace {hf_model}: {e}")
         except Exception as e:
             logger.warning(f"HuggingFace image: {e}")
 
-        # 2. OpenAI DALL-E
+        # 3. OpenAI DALL-E (paid)
         key = os.getenv("OPENAI_API_KEY", "")
         if key:
             try:
@@ -497,6 +529,15 @@ class ArtistAgent(BaseAgent):
                             return data["data"][0]["url"]
             except Exception as e:
                 logger.error(f"OpenAI image: {e}")
+
+        # 4. Last resort: return Pollinations URL directly (browser can render it)
+        try:
+            encoded = urllib.parse.quote(prompt)
+            direct_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
+            logger.info(f"Returning Pollinations direct URL: {direct_url}")
+            return direct_url
+        except Exception:
+            pass
 
         return ""
 
