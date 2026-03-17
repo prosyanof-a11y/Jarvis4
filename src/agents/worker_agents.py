@@ -6,6 +6,7 @@ Each worker agent has unique capabilities and handles specific types of work.
 
 import asyncio
 import logging
+import os
 from typing import Any
 from datetime import datetime
 
@@ -143,16 +144,15 @@ class DesignerAgent(BaseAgent):
 
 
 class ArtistAgent(BaseAgent):
-    """Generates images, illustrations, visual content."""
+    """Generates images using OpenAI DALL-E API or LLM description."""
 
     def __init__(self):
         super().__init__(
             name="Artist",
             role="Художник",
             capabilities=[
-                "Генерация изображений",
+                "Генерация изображений (DALL-E)",
                 "Иллюстрации",
-                "Обработка фото",
                 "Создание баннеров",
                 "Инфографика",
                 "Визуальный контент"
@@ -161,17 +161,74 @@ class ArtistAgent(BaseAgent):
 
     async def _execute_task(self, task: Task) -> Any:
         await self._report_progress(task, 0.2, "Подготовка промпта...")
-        await asyncio.sleep(0.2)
-        await self._report_progress(task, 0.6, "Генерация изображения...")
-        await asyncio.sleep(0.3)
-        await self._report_progress(task, 0.9, "Пост-обработка...")
-        return {
-            "type": "image",
-            "task": task.description,
-            "result": f"Изображение создано: {task.description}",
-            "format": "png",
-            "timestamp": datetime.now().isoformat()
-        }
+
+        # Try to generate image via OpenAI DALL-E
+        image_url = await self._generate_image(task.description)
+
+        if image_url:
+            await self._report_progress(task, 0.9, "Изображение сгенерировано!")
+            return {
+                "type": "image",
+                "task": task.description,
+                "image_url": image_url,
+                "result": f"Изображение создано! URL: {image_url}",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            # Fallback: use LLM to describe the image
+            await self._report_progress(task, 0.5, "Генерация через LLM...")
+            if self._llm_client:
+                description = await self.ask_llm(
+                    f"Опиши подробно изображение: {task.description}. "
+                    f"Дай детальное художественное описание того, как бы выглядело это изображение.",
+                    system_prompt="Ты художник-иллюстратор. Описывай изображения ярко и детально."
+                )
+                return {
+                    "type": "image_description",
+                    "task": task.description,
+                    "result": description,
+                    "timestamp": datetime.now().isoformat()
+                }
+            return {
+                "type": "image",
+                "task": task.description,
+                "result": f"[Artist] Описание: {task.description}. Для генерации изображений добавьте OPENAI_API_KEY.",
+                "timestamp": datetime.now().isoformat()
+            }
+
+    async def _generate_image(self, prompt: str) -> str:
+        """Generate image using OpenAI DALL-E API."""
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if not api_key:
+            return ""
+
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.openai.com/v1/images/generations",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "dall-e-3",
+                        "prompt": prompt,
+                        "n": 1,
+                        "size": "1024x1024"
+                    },
+                    timeout=aiohttp.ClientTimeout(total=60)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data["data"][0]["url"]
+                    else:
+                        error = await resp.text()
+                        logger.error(f"DALL-E error: {error}")
+                        return ""
+        except Exception as e:
+            logger.error(f"Image generation error: {e}")
+            return ""
 
 
 class MarketerAgent(BaseAgent):

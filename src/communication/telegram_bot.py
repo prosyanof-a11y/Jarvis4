@@ -315,14 +315,31 @@ class AgentTelegramBot:
             await self.agent.assign_task(task)
             await self.agent.think(task)
             result = await self.agent.work(task)
-            result_text = str(result)
-            if len(result_text) > 3500:
-                result_text = result_text[:3500] + "...(обрезано)"
-            # Send without Markdown to avoid parse errors from special chars in result
-            try:
-                await update.message.reply_text(f"✅ Готово!\n\n{result_text}")
-            except Exception:
-                await update.message.reply_text(f"✅ Готово!\n\n{result_text[:1000]}")
+
+            # Check if result contains an image URL
+            image_url = None
+            if isinstance(result, dict):
+                image_url = result.get("image_url")
+
+            if image_url:
+                # Send image
+                try:
+                    await update.message.reply_photo(
+                        photo=image_url,
+                        caption=f"✅ {result.get('task', description)}"
+                    )
+                except Exception as img_err:
+                    await update.message.reply_text(
+                        f"✅ Изображение создано!\nURL: {image_url}"
+                    )
+            else:
+                result_text = str(result)
+                if len(result_text) > 3500:
+                    result_text = result_text[:3500] + "...(обрезано)"
+                try:
+                    await update.message.reply_text(f"✅ Готово!\n\n{result_text}")
+                except Exception:
+                    await update.message.reply_text(f"✅ Готово!\n\n{result_text[:1000]}")
         except Exception as e:
             try:
                 await update.message.reply_text(f"❌ Ошибка: {e}")
