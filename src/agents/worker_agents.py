@@ -197,38 +197,52 @@ class ArtistAgent(BaseAgent):
             }
 
     async def _generate_image(self, prompt: str) -> str:
-        """Generate image using OpenAI DALL-E API."""
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        if not api_key:
-            return ""
+        """Generate image using OpenRouter (DALL-E) or direct OpenAI API."""
+        import aiohttp
 
-        try:
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.openai.com/v1/images/generations",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "model": "dall-e-3",
-                        "prompt": prompt,
-                        "n": 1,
-                        "size": "1024x1024"
-                    },
-                    timeout=aiohttp.ClientTimeout(total=60)
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data["data"][0]["url"]
-                    else:
-                        error = await resp.text()
-                        logger.error(f"DALL-E error: {error}")
-                        return ""
-        except Exception as e:
-            logger.error(f"Image generation error: {e}")
-            return ""
+        # Try OpenRouter first
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
+        if openrouter_key:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        "https://openrouter.ai/api/v1/images/generations",
+                        headers={
+                            "Authorization": f"Bearer {openrouter_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://jarvis4.ai",
+                            "X-Title": "Jarvis4"
+                        },
+                        json={"model": "openai/dall-e-3", "prompt": prompt, "n": 1, "size": "1024x1024"},
+                        timeout=aiohttp.ClientTimeout(total=90)
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if "data" in data and data["data"]:
+                                return data["data"][0].get("url", "")
+                        logger.warning(f"OpenRouter image: {resp.status}")
+            except Exception as e:
+                logger.warning(f"OpenRouter image error: {e}")
+
+        # Fallback: direct OpenAI
+        openai_key = os.getenv("OPENAI_API_KEY", "")
+        if openai_key:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        "https://api.openai.com/v1/images/generations",
+                        headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
+                        json={"model": "dall-e-3", "prompt": prompt, "n": 1, "size": "1024x1024"},
+                        timeout=aiohttp.ClientTimeout(total=90)
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            return data["data"][0]["url"]
+                        logger.error(f"OpenAI DALL-E: {resp.status}")
+            except Exception as e:
+                logger.error(f"OpenAI image error: {e}")
+
+        return ""
 
 
 class MarketerAgent(BaseAgent):
