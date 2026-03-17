@@ -317,12 +317,17 @@ class AgentTelegramBot:
             result = await self.agent.work(task)
             result_text = str(result)
             if len(result_text) > 3500:
-                result_text = result_text[:3500] + "...\n_(обрезано)_"
-            await update.message.reply_text(
-                f"✅ *Готово!*\n\n{result_text}", parse_mode="Markdown"
-            )
+                result_text = result_text[:3500] + "...(обрезано)"
+            # Send without Markdown to avoid parse errors from special chars in result
+            try:
+                await update.message.reply_text(f"✅ Готово!\n\n{result_text}")
+            except Exception:
+                await update.message.reply_text(f"✅ Готово!\n\n{result_text[:1000]}")
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {e}", parse_mode="Markdown")
+            try:
+                await update.message.reply_text(f"❌ Ошибка: {e}")
+            except Exception:
+                await update.message.reply_text("❌ Произошла ошибка при выполнении задачи")
 
     async def send_notification(self, notification: Dict[str, Any]):
         """Send notification to all registered chats."""
@@ -331,9 +336,15 @@ class AgentTelegramBot:
         msg = notification.get("data", {}).get("message", str(notification.get("type", "")))
         for cid in self.chat_ids:
             try:
-                await self.bot.send_message(chat_id=cid, text=msg, parse_mode="Markdown")
+                await self.bot.send_message(chat_id=cid, text=msg)
             except Exception as e:
                 self.logger.error(f"Notification send error: {e}")
+                try:
+                    # Fallback: send without special chars
+                    clean_msg = msg.replace('*', '').replace('_', '').replace('`', '')
+                    await self.bot.send_message(chat_id=cid, text=clean_msg)
+                except Exception:
+                    pass
 
 
 class ControlPanelBot:
@@ -418,9 +429,15 @@ class ControlPanelBot:
             text = str(result)
             if len(text) > 3500:
                 text = text[:3500] + "..."
-            await update.message.reply_text(f"✅ *Результат:*\n{text}", parse_mode="Markdown")
+            try:
+                await update.message.reply_text(f"✅ Результат:\n{text}")
+            except Exception:
+                await update.message.reply_text(f"✅ Результат:\n{text[:1000]}")
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {e}")
+            try:
+                await update.message.reply_text(f"❌ Ошибка: {e}")
+            except Exception:
+                await update.message.reply_text("❌ Ошибка при выполнении задачи")
 
     async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.message:
