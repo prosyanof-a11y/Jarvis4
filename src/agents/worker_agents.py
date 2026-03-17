@@ -243,44 +243,37 @@ class ArtistAgent(BaseAgent):
                 "timestamp": datetime.now().isoformat()}
 
     async def _generate_image(self, prompt: str) -> str:
-        """Generate image. Uses multiple free/paid APIs."""
+        """Generate image and save to temp file. Returns file:// path."""
         import aiohttp
-        from urllib.parse import quote
+        import tempfile
 
-        # 1. Together.ai free inference (Stable Diffusion XL)
-        together_key = os.getenv("TOGETHER_API_KEY", "")
-        if together_key:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        "https://api.together.xyz/v1/images/generations",
-                        headers={"Authorization": f"Bearer {together_key}", "Content-Type": "application/json"},
-                        json={"model": "stabilityai/stable-diffusion-xl-base-1.0",
-                              "prompt": prompt, "n": 1, "width": 1024, "height": 1024},
-                        timeout=aiohttp.ClientTimeout(total=60)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            if data.get("data"):
-                                url = data["data"][0].get("url", "")
-                                if url:
-                                    return url
-            except Exception as e:
-                logger.warning(f"Together.ai image: {e}")
-
-        # 2. Pollinations.ai — FREE, no key
+        # 1. HuggingFace Inference API (FREE, no key needed for some models)
+        hf_token = os.getenv("HF_TOKEN", "")
         try:
-            encoded = quote(prompt, safe='')
-            poll_url = f"https://image.pollinations.ai/prompt/{encoded}"
+            headers = {"Content-Type": "application/json"}
+            if hf_token:
+                headers["Authorization"] = f"Bearer {hf_token}"
             async with aiohttp.ClientSession() as session:
-                async with session.head(poll_url, timeout=aiohttp.ClientTimeout(total=30),
-                                        allow_redirects=True) as resp:
-                    if resp.status == 200:
-                        return poll_url
+                async with session.post(
+                    "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
+                    headers=headers,
+                    json={"inputs": prompt},
+                    timeout=aiohttp.ClientTimeout(total=120)
+                ) as resp:
+                    if resp.status == 200 and resp.content_type.startswith("image"):
+                        img_bytes = await resp.read()
+                        if len(img_bytes) > 1000:
+                            fd, path = tempfile.mkstemp(suffix='.png')
+                            with os.fdopen(fd, 'wb') as f:
+                                f.write(img_bytes)
+                            logger.info(f"Image generated via HuggingFace: {path}")
+                            return f"file://{path}"
+                    else:
+                        logger.warning(f"HuggingFace: status={resp.status}")
         except Exception as e:
-            logger.warning(f"Pollinations: {e}")
+            logger.warning(f"HuggingFace image: {e}")
 
-        # 3. OpenAI DALL-E
+        # 2. OpenAI DALL-E
         key = os.getenv("OPENAI_API_KEY", "")
         if key:
             try:
@@ -296,25 +289,6 @@ class ArtistAgent(BaseAgent):
                             return data["data"][0]["url"]
             except Exception as e:
                 logger.error(f"OpenAI image: {e}")
-
-        # 4. Fallback: download from Pollinations and return bytes
-        try:
-            encoded = quote(prompt, safe='')
-            poll_url = f"https://image.pollinations.ai/prompt/{encoded}"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(poll_url, timeout=aiohttp.ClientTimeout(total=60),
-                                       allow_redirects=True) as resp:
-                    if resp.status == 200:
-                        img_bytes = await resp.read()
-                        if len(img_bytes) > 1000:  # Valid image
-                            # Save to temp file
-                            import tempfile
-                            fd, path = tempfile.mkstemp(suffix='.png')
-                            with os.fdopen(fd, 'wb') as f:
-                                f.write(img_bytes)
-                            return f"file://{path}"
-        except Exception as e:
-            logger.error(f"Pollinations download: {e}")
 
         return ""
 
