@@ -243,29 +243,23 @@ class ArtistAgent(BaseAgent):
                 "timestamp": datetime.now().isoformat()}
 
     async def _generate_image(self, prompt: str) -> str:
-        """Generate image via OpenRouter or OpenAI."""
+        """Generate image. Priority: Pollinations (free) → OpenAI DALL-E."""
         import aiohttp
+        from urllib.parse import quote
 
-        # OpenRouter
-        key = os.getenv("OPENROUTER_API_KEY", "")
-        if key:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        "https://openrouter.ai/api/v1/images/generations",
-                        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-                                 "HTTP-Referer": "https://jarvis4.ai", "X-Title": "Jarvis4"},
-                        json={"model": "openai/dall-e-3", "prompt": prompt, "n": 1, "size": "1024x1024"},
-                        timeout=aiohttp.ClientTimeout(total=90)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            if "data" in data and data["data"]:
-                                return data["data"][0].get("url", "")
-            except Exception as e:
-                logger.warning(f"OpenRouter image: {e}")
+        # 1. Pollinations.ai — FREE, no API key needed
+        try:
+            encoded = quote(prompt)
+            url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                    if resp.status == 200 and resp.content_type.startswith("image"):
+                        return url  # Pollinations returns the image at this URL
+            logger.warning("Pollinations.ai failed")
+        except Exception as e:
+            logger.warning(f"Pollinations error: {e}")
 
-        # OpenAI fallback
+        # 2. OpenAI DALL-E (if key available)
         key = os.getenv("OPENAI_API_KEY", "")
         if key:
             try:

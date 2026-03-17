@@ -130,7 +130,7 @@ class BaseAgent:
         self._notification_callbacks.append(callback)
 
     async def notify(self, ntype: NotificationType, data: Dict[str, Any] = None):
-        """Send notification about agent activity to all channels."""
+        """Send notification about agent activity. Only COMPLETED and ERROR go to Telegram."""
         notification = {
             "agent_id": self.id,
             "agent_name": self.name,
@@ -149,7 +149,8 @@ class BaseAgent:
             except Exception as e:
                 self.logger.error(f"Notification callback error: {e}")
 
-        if self._telegram_notifier:
+        # Only send COMPLETED and ERROR to Telegram (no intermediate spam)
+        if self._telegram_notifier and ntype in (NotificationType.TASK_COMPLETED, NotificationType.TASK_ERROR):
             try:
                 await self._telegram_notifier.send_notification(notification)
             except Exception as e:
