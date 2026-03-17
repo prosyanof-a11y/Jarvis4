@@ -172,12 +172,137 @@ class AgentTelegramBot:
         await update.message.reply_text(text, parse_mode="Markdown")
 
     async def _handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Handle plain text — chat as AI agent, not immediately as task.
+        The agent can:
+        - Greet and have conversations
+        - Answer questions
+        - Confirm tasks before executing
+        - Support casual dialogue
+        """
         if not update.message or not update.message.text:
             return
         cid = update.message.chat_id
         if cid not in self.chat_ids:
             self.chat_ids.append(cid)
-        await self._process_task(update, update.message.text)
+
+        text = update.message.text.strip()
+
+        # Check if user is confirming a pending task
+        if hasattr(self, '_pending_task') and self._pending_task:
+            if text.lower() in ['да', 'yes', 'ок', 'ok', 'давай', 'выполняй', 'go', 'подтверждаю', '+']:
+                task_desc = self._pending_task
+                self._pending_task = None
+                await self._process_task(update, task_desc)
+                return
+            elif text.lower() in ['нет', 'no', 'отмена', 'cancel', 'не надо', '-']:
+                self._pending_task = None
+                await update.message.reply_text("👌 Задача отменена. Чем ещё могу помочь?")
+                return
+
+        # Use LLM to chat naturally
+        if self.agent._llm_client:
+            try:
+                # Build conversation context
+                history = getattr(self, '_chat_history', {}).get(cid, [])
+
+                system_prompt = (
+                    f"Ты — {self.agent.name}, AI-агент в системе Jarvis4 AI Office. "
+                    f"Твоя роль: {self.agent.role}. "
+                    f"Твои возможности: {', '.join(self.agent.capabilities[:5])}. "
+                    f"Общайся дружелюбно и профессионально на русском языке. "
+                    f"Если пользователь просит выполнить задачу или работу, "
+                    f"НЕ выполняй сразу — спроси подтверждение: "
+                    f"'Хотите, чтобы я выполнил эту задачу? Ответьте Да/Нет'. "
+                    f"Если это просто разговор, приветствие или вопрос — отвечай как собеседник. "
+                    f"Будь кратким (до 200 слов)."
+                )
+
+                response = await self.agent._llm_client.chat(
+                    message=text,
+                    system_prompt=system_prompt,
+                    history=history[-10:]  # Last 10 messages for context
+                )
+
+                reply = response.content
+
+                # Save chat history
+                if not hasattr(self, '_chat_history'):
+                    self._chat_history = {}
+                if cid not in self._chat_history:
+                    self._chat_history[cid] = []
+                self._chat_history[cid].append({"role": "user", "content": text})
+                self._chat_history[cid].append({"role": "assistant", "content": reply})
+                # Keep last 20 messages
+                self._chat_history[cid] = self._chat_history[cid][-20:]
+
+                # Check if LLM suggested task confirmation
+                if any(phrase in reply.lower() for phrase in [
+                    'хотите, чтобы я выполнил', 'выполнить эту задачу',
+                    'приступить к выполнению', 'начать работу',
+                    'ответьте да/нет', 'да/нет'
+                ]):
+                    self._pending_task = text
+
+                await update.message.reply_text(reply)
+
+            except Exception as e:
+                self.logger.error(f"LLM chat error: {e}")
+                # Fallback: simple response
+                await self._simple_chat(update, text)
+        else:
+            # No LLM — use simple pattern matching
+            await self._simple_chat(update, text)
+
+    async def _simple_chat(self, update, text: str):
+        """Simple chat without LLM — pattern-based responses."""
+        text_lower = text.lower()
+
+        # Greetings
+        if any(w in text_lower for w in ['привет', 'здравствуй', 'hello', 'hi', 'хай', 'добр']):
+            await update.message.reply_text(
+                f"👋 Привет! Я {self.agent.name} — {self.agent.role}.\n"
+                f"Чем могу помочь? Напишите /task чтобы дать мне задачу."
+            )
+            return
+
+        # How are you
+        if any(w in text_lower for w in ['как дела', 'как ты', 'how are']):
+            state = self.agent.state.value
+            await update.message.reply_text(
+                f"Спасибо, что спрашиваете! Сейчас я в состоянии: {state}. "
+                f"Готов к работе! 💪"
+            )
+            return
+
+        # What can you do
+        if any(w in text_lower for w in ['что умеешь', 'что можешь', 'возможности', 'help']):
+            caps = "\n".join(f"• {c}" for c in self.agent.capabilities[:6])
+            await update.message.reply_text(
+                f"🛠 Мои возможности:\n{caps}\n\n"
+                f"Используйте /task <описание> чтобы дать мне задачу."
+            )
+            return
+
+        # Looks like a task — ask for confirmation
+        if len(text) > 20 and any(w in text_lower for w in [
+            'сделай', 'создай', 'найди', 'напиши', 'разработай', 'проанализируй',
+            'исследуй', 'нарисуй', 'спроектируй', 'make', 'create', 'find', 'write',
+            'build', 'design', 'analyze', 'research'
+        ]):
+            self._pending_task = text
+            await update.message.reply_text(
+                f"📋 Похоже на задачу:\n_{text}_\n\n"
+                f"Выполнить? Ответьте *Да* или *Нет*",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Default
+        await update.message.reply_text(
+            f"Я {self.agent.name}. Напишите /task <описание> чтобы дать задачу, "
+            f"или просто пообщаемся! 😊"
+        )
 
     async def _process_task(self, update: Update, description: str):
         from src.agents.base_agent import Task
@@ -357,12 +482,72 @@ class ControlPanelBot:
         asyncio.create_task(self._execute_and_reply(update, task))
 
     async def _handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Chat with Master Agent via LLM, confirm tasks before executing."""
         if not update.message or not update.message.text:
             return
-        desc = update.message.text
-        await update.message.reply_text(f"📋 Задача: _{desc}_", parse_mode="Markdown")
-        task = await self.task_engine.submit_task(desc)
-        asyncio.create_task(self._execute_and_reply(update, task))
+        text = update.message.text.strip()
+
+        # Check pending task confirmation
+        if hasattr(self, '_pending_task') and self._pending_task:
+            if text.lower() in ['да', 'yes', 'ок', 'ok', 'давай', 'go', '+']:
+                desc = self._pending_task
+                self._pending_task = None
+                await update.message.reply_text(f"⚡ Выполняю: _{desc}_", parse_mode="Markdown")
+                task = await self.task_engine.submit_task(desc)
+                asyncio.create_task(self._execute_and_reply(update, task))
+                return
+            elif text.lower() in ['нет', 'no', 'отмена', 'cancel', '-']:
+                self._pending_task = None
+                await update.message.reply_text("👌 Отменено. Чем ещё помочь?")
+                return
+
+        # Try LLM chat
+        master = self.agent_manager.get_agent("master")
+        if master and master._llm_client:
+            try:
+                system_prompt = (
+                    "Ты — Jarvis, главный AI-ассистент системы AI Office. "
+                    "Ты управляешь командой AI-агентов: Researcher, Programmer, Analyst, Designer, Artist, Marketer. "
+                    "Общайся дружелюбно на русском. Если пользователь просит выполнить работу, "
+                    "спроси подтверждение: 'Выполнить задачу? Ответьте Да/Нет'. "
+                    "Если это разговор — поддержи беседу. Будь кратким."
+                )
+                response = await master._llm_client.chat(
+                    message=text, system_prompt=system_prompt
+                )
+                reply = response.content
+
+                if any(p in reply.lower() for p in ['выполнить задачу', 'да/нет', 'приступить']):
+                    self._pending_task = text
+
+                await update.message.reply_text(reply)
+            except Exception as e:
+                logger.error(f"Control panel LLM error: {e}")
+                await self._simple_control_chat(update, text)
+        else:
+            await self._simple_control_chat(update, text)
+
+    async def _simple_control_chat(self, update, text: str):
+        """Fallback chat without LLM."""
+        t = text.lower()
+        if any(w in t for w in ['привет', 'hello', 'hi', 'здравствуй']):
+            await update.message.reply_text(
+                "👋 Привет! Я Jarvis — управляющий AI Office.\n"
+                "Используйте /task для задач или просто пообщаемся!"
+            )
+        elif any(w in t for w in ['как дела', 'как ты']):
+            await update.message.reply_text(
+                "Отлично! Все агенты на местах и готовы к работе. 🏢"
+            )
+        elif len(text) > 15 and any(w in t for w in ['сделай', 'создай', 'найди', 'напиши']):
+            self._pending_task = text
+            await update.message.reply_text(
+                f"📋 Задача: _{text}_\n\nВыполнить? *Да/Нет*", parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                "Я Jarvis! Напишите /task для задачи или /status для статуса. 😊"
+            )
 
 
 class TelegramBotManager:
