@@ -117,11 +117,13 @@ async def startup():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", settings.FASTAPI_PORT))
-    logger.info(f"Starting FastAPI on port {port}")
+    # Railway sets PORT env var; default to 8080 for Railway compatibility
+    port = int(os.getenv("PORT", "8080"))
+    host = os.getenv("HOST", "0.0.0.0")
+    logger.info(f"Starting FastAPI on {host}:{port}")
     uvicorn.run(
         "run:fastapi_app",
-        host=settings.FASTAPI_HOST,
+        host=host,
         port=port,
         log_level="info"
     )
