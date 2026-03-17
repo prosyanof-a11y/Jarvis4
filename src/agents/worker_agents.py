@@ -20,18 +20,22 @@ from .base_agent import BaseAgent, Task
 
 logger = logging.getLogger(__name__)
 
-# Model assignments per agent role (OpenRouter model IDs)
-# Priority: free → cheap → standard
-AGENT_MODELS = {
-    "researcher": "meta-llama/llama-3.1-8b-instruct:free",      # Free, good for research
-    "programmer": "deepseek/deepseek-coder",                      # Cheap, code-specialized
-    "analyst": "meta-llama/llama-3.1-70b-instruct",              # Good analytical reasoning
-    "designer": "meta-llama/llama-3.1-8b-instruct:free",        # Free, creative
-    "artist": "meta-llama/llama-3.1-8b-instruct:free",          # Free for descriptions
-    "marketer": "mistralai/mistral-7b-instruct:free",            # Free, good for content
-    "master": "anthropic/claude-3.5-sonnet",                      # Best for coordination
-    "project_manager": "meta-llama/llama-3.1-8b-instruct:free", # Free for planning
-}
+# Import settings for agent model configuration
+try:
+    from config.settings import settings
+    AGENT_MODELS = settings.AGENT_MODELS
+except ImportError:
+    # Fallback defaults if settings not available
+    AGENT_MODELS = {
+        "researcher": "meta-llama/llama-3.1-8b-instruct:free",
+        "programmer": "deepseek/deepseek-coder",
+        "analyst": "meta-llama/llama-3.1-70b-instruct",
+        "designer": "meta-llama/llama-3.1-8b-instruct:free",
+        "artist": "meta-llama/llama-3.1-8b-instruct:free",
+        "marketer": "mistralai/mistral-7b-instruct:free",
+        "master": "anthropic/claude-3.5-sonnet",
+        "project_manager": "meta-llama/llama-3.1-8b-instruct:free",
+    }
 
 
 class ResearcherAgent(BaseAgent):

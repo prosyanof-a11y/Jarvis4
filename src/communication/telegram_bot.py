@@ -56,6 +56,8 @@ class AgentTelegramBot:
             self.application.add_handler(CommandHandler("capabilities", self._cmd_caps))
             self.application.add_handler(CommandHandler("cancel", self._cmd_cancel))
             self.application.add_handler(CommandHandler("history", self._cmd_history))
+            self.application.add_handler(CommandHandler("model", self._cmd_model))
+            self.application.add_handler(CommandHandler("models", self._cmd_models))
             self.application.add_handler(
                 MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_text)
             )
@@ -84,12 +86,17 @@ class AgentTelegramBot:
             self.chat_ids.append(cid)
         info = self.agent.get_info()
         caps = "\n".join(f"• {c}" for c in info["capabilities"][:6])
+        model = self.agent.get_preferred_model()
         await update.message.reply_text(
-            f"🤖 *{info['name']}* — {info['role']}\n\n"
+            f"🤖 *{info['name']}* — {info['role']}\n"
+            f"🧠 Модель: `{model}`\n\n"
             f"Возможности:\n{caps}\n\n"
             f"Команды:\n"
             f"/task <описание> — дать задачу\n"
             f"/status — статус\n"
+            f"/model — текущая AI модель\n"
+            f"/model <название> — сменить модель\n"
+            f"/models — список доступных моделей\n"
             f"/capabilities — возможности\n"
             f"/history — история\n"
             f"/cancel — отменить\n\n"
@@ -170,6 +177,61 @@ class AgentTelegramBot:
             s = "✅" if t.get("success") else "❌"
             text += f"{i}. {s} {t.get('description', 'N/A')[:60]}\n"
         await update.message.reply_text(text, parse_mode="Markdown")
+
+    async def _cmd_model(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Set or view the AI model for this agent. Usage: /model [model_name]"""
+        if not update.message:
+            return
+        args = context.args if context.args else []
+
+        if not args:
+            # Show current model
+            current = self.agent.get_preferred_model()
+            await update.message.reply_text(
+                f"🤖 *{self.agent.name}* — текущая модель:\n"
+                f"`{current}`\n\n"
+                f"Чтобы сменить: /model <название>\n"
+                f"Список моделей: /models",
+                parse_mode="Markdown"
+            )
+            return
+
+        new_model = " ".join(args)
+        self.agent.set_preferred_model(new_model)
+        await update.message.reply_text(
+            f"✅ Модель *{self.agent.name}* изменена на:\n`{new_model}`",
+            parse_mode="Markdown"
+        )
+
+    async def _cmd_models(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show available AI models."""
+        if not update.message:
+            return
+        try:
+            from src.ai.llm_client import AVAILABLE_MODELS
+            # Group by provider
+            providers = {}
+            for short, full in AVAILABLE_MODELS.items():
+                provider = full.split("/")[0] if "/" in full else "other"
+                if provider not in providers:
+                    providers[provider] = []
+                providers[provider].append(f"• `{short}` → {full}")
+
+            text = f"📋 *Доступные модели OpenRouter*\n\n"
+            text += f"Текущая модель {self.agent.name}: `{self.agent.get_preferred_model()}`\n\n"
+            for provider, models in sorted(providers.items()):
+                text += f"**{provider}:**\n"
+                text += "\n".join(models[:5])  # Max 5 per provider
+                if len(models) > 5:
+                    text += f"\n  ...и ещё {len(models) - 5}"
+                text += "\n\n"
+            text += "Сменить: /model <название>"
+
+            if len(text) > 4000:
+                text = text[:4000] + "..."
+            await update.message.reply_text(text, parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка: {e}")
 
     async def _handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -426,6 +488,8 @@ class ControlPanelBot:
             self.application.add_handler(CommandHandler("agents", self._cmd_agents))
             self.application.add_handler(CommandHandler("report", self._cmd_report))
             self.application.add_handler(CommandHandler("assign", self._cmd_assign))
+            self.application.add_handler(CommandHandler("model", self._cmd_model))
+            self.application.add_handler(CommandHandler("models", self._cmd_models))
             self.application.add_handler(
                 MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_text)
             )
@@ -590,6 +654,83 @@ class ControlPanelBot:
         )
         task = await self.task_engine.submit_task(desc, target_agent=agent_name)
         asyncio.create_task(self._execute_and_reply(update, task))
+
+    async def _cmd_model(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Set or view agent models. Usage: /model [agent_name] [model_name]"""
+        if not update.message:
+            return
+        args = context.args if context.args else []
+
+        if not args:
+            # Show all agent models
+            models = self.agent_manager.get_agent_models()
+            text = "🧠 *Модели агентов AI Office*\n\n"
+            for name, model in models.items():
+                text += f"• *{name}*: `{model}`\n"
+            text += "\nСменить: /model <агент> <модель>\nПример: /model programmer deepseek-coder"
+            await update.message.reply_text(text, parse_mode="Markdown")
+            return
+
+        if len(args) == 1:
+            # Show model for specific agent
+            agent_name = args[0].lower()
+            agent = self.agent_manager.get_agent(agent_name)
+            if agent:
+                await update.message.reply_text(
+                    f"🧠 *{agent.name}*: `{agent.get_preferred_model()}`\n\n"
+                    f"Сменить: /model {agent_name} <модель>",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(f"❌ Агент '{agent_name}' не найден")
+            return
+
+        # Set model for agent
+        agent_name = args[0].lower()
+        new_model = " ".join(args[1:])
+        success = self.agent_manager.set_agent_model(agent_name, new_model)
+        if success:
+            await update.message.reply_text(
+                f"✅ Модель *{agent_name}* изменена на:\n`{new_model}`",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(f"❌ Агент '{agent_name}' не найден")
+
+    async def _cmd_models(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show all available AI models."""
+        if not update.message:
+            return
+        try:
+            from src.ai.llm_client import AVAILABLE_MODELS
+            providers = {}
+            for short, full in AVAILABLE_MODELS.items():
+                provider = full.split("/")[0] if "/" in full else "other"
+                if provider not in providers:
+                    providers[provider] = []
+                providers[provider].append(f"• `{short}` → {full}")
+
+            text = "📋 *Доступные модели OpenRouter*\n\n"
+            # Show current agent models
+            models = self.agent_manager.get_agent_models()
+            text += "*Текущие модели агентов:*\n"
+            for name, model in models.items():
+                text += f"  {name}: `{model}`\n"
+            text += "\n"
+
+            for provider, model_list in sorted(providers.items()):
+                text += f"**{provider}:**\n"
+                text += "\n".join(model_list[:5])
+                if len(model_list) > 5:
+                    text += f"\n  ...и ещё {len(model_list) - 5}"
+                text += "\n\n"
+            text += "Сменить: /model <агент> <модель>"
+
+            if len(text) > 4000:
+                text = text[:4000] + "..."
+            await update.message.reply_text(text, parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка: {e}")
 
     async def _handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Chat with Master Agent via LLM, confirm tasks before executing."""

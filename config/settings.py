@@ -75,6 +75,29 @@ class Settings:
         self.TASK_PROCESSING_TIMEOUT = int(os.getenv("TASK_PROCESSING_TIMEOUT", "300"))
         self.MAX_CONCURRENT_TASKS = int(os.getenv("MAX_CONCURRENT_TASKS", "10"))
 
+        # ─── Agent AI Models (OpenRouter) ────────
+        # Each agent can have its own AI model via env vars
+        # Format: AGENT_{NAME}_MODEL=openrouter/model-id
+        # Falls back to defaults if not set
+        self.AGENT_MODELS = {
+            "master": os.getenv("AGENT_MASTER_MODEL", "anthropic/claude-3.5-sonnet"),
+            "project_manager": os.getenv("AGENT_PROJECT_MANAGER_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
+            "researcher": os.getenv("AGENT_RESEARCHER_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
+            "programmer": os.getenv("AGENT_PROGRAMMER_MODEL", "deepseek/deepseek-coder"),
+            "analyst": os.getenv("AGENT_ANALYST_MODEL", "meta-llama/llama-3.1-70b-instruct"),
+            "designer": os.getenv("AGENT_DESIGNER_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
+            "artist": os.getenv("AGENT_ARTIST_MODEL", "meta-llama/llama-3.1-8b-instruct:free"),
+            "marketer": os.getenv("AGENT_MARKETER_MODEL", "mistralai/mistral-7b-instruct:free"),
+        }
+
+    def get_agent_model(self, agent_name: str) -> str:
+        """Get the configured AI model for a specific agent."""
+        return self.AGENT_MODELS.get(agent_name.lower(), self.OPENROUTER_DEFAULT_MODEL)
+
+    def set_agent_model(self, agent_name: str, model: str):
+        """Set the AI model for a specific agent (runtime only, not persisted to .env)."""
+        self.AGENT_MODELS[agent_name.lower()] = model
+
         # ─── Logging ──────────────────────────────
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
         self.LOG_FILE = os.getenv("LOG_FILE", "./data/logs/jarvis4.log")

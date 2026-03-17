@@ -21,8 +21,13 @@ from src.agents.worker_agents import (
     ResearcherAgent, ProgrammerAgent, AnalystAgent,
     DesignerAgent, ArtistAgent, MarketerAgent
 )
-from src.ai.llm_client import LLMClient
+from src.ai.llm_client import LLMClient, AVAILABLE_MODELS
 from src.tools.tools import ToolManager
+
+try:
+    from config.settings import settings as app_settings
+except ImportError:
+    app_settings = None
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +88,14 @@ class AgentManager:
         for agent in self.agents.values():
             agent.set_tool_manager(self.tool_manager)
 
+        # Apply agent models from settings
+        if app_settings:
+            for agent_name, model in app_settings.AGENT_MODELS.items():
+                agent = self.agents.get(agent_name)
+                if agent and hasattr(agent, '_preferred_model'):
+                    agent._preferred_model = model
+                    logger.info(f"Agent {agent_name}: model = {model}")
+
         self._initialized = True
         logger.info(f"Initialized {len(self.agents)} agents with ToolManager")
 
@@ -126,3 +139,27 @@ class AgentManager:
 
     def get_agent_count(self) -> int:
         return len(self.agents)
+
+    def set_agent_model(self, agent_name: str, model: str) -> bool:
+        """Change the AI model for a specific agent at runtime."""
+        agent = self.agents.get(agent_name.lower())
+        if not agent:
+            return False
+        agent.set_preferred_model(model)
+        # Also update settings if available
+        if app_settings:
+            app_settings.set_agent_model(agent_name, model)
+        logger.info(f"Agent {agent_name}: model changed to {model}")
+        return True
+
+    def get_agent_models(self) -> Dict[str, str]:
+        """Get current AI model for each agent."""
+        models = {}
+        for name, agent in self.agents.items():
+            models[name] = agent.get_preferred_model()
+        return models
+
+    @staticmethod
+    def get_available_models() -> Dict[str, str]:
+        """Get all available OpenRouter model shortcuts."""
+        return AVAILABLE_MODELS

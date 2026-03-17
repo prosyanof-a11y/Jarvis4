@@ -96,6 +96,16 @@ class BaseAgent:
         """Set the LLM client (OpenRouter) for AI-powered task execution."""
         self._llm_client = llm_client
 
+    def set_preferred_model(self, model: str):
+        """Set the preferred AI model for this agent."""
+        if hasattr(self, '_preferred_model'):
+            self._preferred_model = model
+            self.logger.info(f"{self.name}: model set to {model}")
+
+    def get_preferred_model(self) -> str:
+        """Get the current preferred AI model for this agent."""
+        return getattr(self, '_preferred_model', None) or "default"
+
     async def ask_llm(self, prompt: str, system_prompt: str = None,
                       model: str = None) -> str:
         """Ask the LLM a question. Uses OpenRouter API."""
@@ -108,6 +118,10 @@ class BaseAgent:
                 f"Your capabilities: {', '.join(self.capabilities)}. "
                 f"Respond in Russian. Be concise and professional."
             )
+        
+        # Use agent's preferred model if no specific model requested
+        if not model and hasattr(self, '_preferred_model'):
+            model = self._preferred_model
         
         response = await self._llm_client.chat(
             message=prompt,

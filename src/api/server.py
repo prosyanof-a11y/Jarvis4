@@ -63,6 +63,11 @@ class ModelSelectRequest(BaseModel):
     model: str  # e.g. "claude-3.5-sonnet" or "openai/gpt-4o"
 
 
+class AgentModelRequest(BaseModel):
+    agent_name: str  # e.g. "programmer", "researcher"
+    model: str  # e.g. "deepseek-coder" or "anthropic/claude-3.5-sonnet"
+
+
 class ChatRequest(BaseModel):
     message: str
     model: Optional[str] = None
@@ -241,3 +246,55 @@ async def fetch_openrouter_models():
         raise HTTPException(500, "LLM client not initialized")
     models = await llm_client.fetch_available_models()
     return {"count": len(models), "models": models[:50]}  # Limit to 50
+
+
+# ─── Agent Model Management ──────────────────────────────────────
+
+@app.get("/agents/models")
+async def get_agent_models():
+    """Get current AI model for each agent."""
+    if not agent_manager:
+        raise HTTPException(500, "Agent manager not initialized")
+    return {
+        "agent_models": agent_manager.get_agent_models(),
+        "available_models": agent_manager.get_available_models(),
+    }
+
+
+@app.post("/agents/model")
+async def set_agent_model(request: AgentModelRequest):
+    """Set AI model for a specific agent."""
+    if not agent_manager:
+        raise HTTPException(500, "Agent manager not initialized")
+
+    agent = agent_manager.get_agent(request.agent_name)
+    if not agent:
+        raise HTTPException(404, f"Agent '{request.agent_name}' not found")
+
+    old_model = agent.get_preferred_model()
+    success = agent_manager.set_agent_model(request.agent_name, request.model)
+    if not success:
+        raise HTTPException(400, "Failed to set model")
+
+    return {
+        "agent": request.agent_name,
+        "old_model": old_model,
+        "new_model": request.model,
+        "status": "updated"
+    }
+
+
+@app.get("/agents/{agent_name}/model")
+async def get_single_agent_model(agent_name: str):
+    """Get the current AI model for a specific agent."""
+    if not agent_manager:
+        raise HTTPException(500, "Agent manager not initialized")
+    agent = agent_manager.get_agent(agent_name)
+    if not agent:
+        raise HTTPException(404, f"Agent '{agent_name}' not found")
+    return {
+        "agent": agent_name,
+        "model": agent.get_preferred_model(),
+        "name": agent.name,
+        "role": agent.role,
+    }
